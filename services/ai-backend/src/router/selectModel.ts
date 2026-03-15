@@ -8,7 +8,7 @@ import { SystemLogger } from '../utils/logger.js';
 const logger = new SystemLogger('ModelRouter');
 
 export type TaskType = 'coding' | 'reasoning' | 'conversation' | 'analysis' | 'planning';
-export type ModelId = 'llama3' | 'mistral' | 'deepseek-coder';
+export type ModelId = 'llama3' | 'mistral' | 'deepseek-coder' | 'llama3.2:1b';
 
 interface ModelProfile {
   id: ModelId;
@@ -48,6 +48,13 @@ const MODEL_REGISTRY: ModelProfile[] = [
     contextWindow: 8192,
     strengths: ['conversation'],
     priority: 1,
+  },
+  {
+    id: 'llama3.2:1b',
+    name: 'Llama 3.2 1B (Fast)',
+    contextWindow: 131072,
+    strengths: ['conversation', 'reasoning', 'planning', 'analysis'],
+    priority: 0, // Highest priority to ensure it's picked if available
   },
 ];
 
@@ -90,7 +97,8 @@ const TASK_KEYWORDS: Record<TaskType, string[]> = {
 const FALLBACK_MAP: Record<ModelId, ModelId> = {
   'deepseek-coder': 'llama3',
   'llama3': 'mistral',
-  'mistral': 'llama3',
+  'mistral': 'llama3.2:1b',
+  'llama3.2:1b': 'llama3',
 };
 
 // ─── Core Router Functions ────────────────────────────────

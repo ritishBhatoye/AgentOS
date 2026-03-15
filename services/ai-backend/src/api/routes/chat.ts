@@ -17,7 +17,7 @@ export const chatRouter = Router();
 
 const chatRequestSchema = z.object({
   message: z.string().min(1, 'Message is required'),
-  conversationId: z.string().uuid().optional(),
+  conversationId: z.string().uuid().nullable().optional().or(z.literal('')),
   model: z.string().optional(),
   stream: z.boolean().optional().default(false),
 });
@@ -38,7 +38,7 @@ chatRouter.post('/', async (req: Request, res: Response, next: NextFunction) => 
     const { message, conversationId: existingConvId, model: preferredModel } = parsed.data;
 
     // Get or create conversation
-    const conversationId = existingConvId || uuid();
+    const conversationId = (existingConvId && existingConvId !== '') ? existingConvId : uuid();
     const conversation = conversationStore.getOrCreate(conversationId);
 
     // Route to best model
