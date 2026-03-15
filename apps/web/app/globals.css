@@ -442,6 +442,13 @@ a:hover {
   margin-bottom: 28px;
 }
 
+.grid-chat {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 20px;
+  height: calc(100vh - 160px);
+}
+
 /* ─── Agent Cards ─── */
 .agent-card {
   background: var(--bg-card);

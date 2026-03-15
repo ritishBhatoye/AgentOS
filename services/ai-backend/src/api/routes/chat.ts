@@ -109,8 +109,16 @@ chatRouter.post('/', async (req: Request, res: Response, next: NextFunction) => 
       };
     }
 
+    // If it's the first message, update the title
+    if (conversation.messages.length === 1 && conversation.title === 'New Conversation') {
+      const titleCandidate = message.substring(0, 30) + (message.length > 30 ? '...' : '');
+      conversation.title = titleCandidate;
+    }
+    conversation.updatedAt = new Date().toISOString();
+
     // Add assistant message to conversation
     conversation.messages.push(assistantMessage);
+    conversation.updatedAt = new Date().toISOString();
 
     const duration = Date.now() - startTime;
 
