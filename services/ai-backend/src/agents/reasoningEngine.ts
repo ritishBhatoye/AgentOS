@@ -77,7 +77,7 @@ export async function runReasoningLoop(params: {
   try {
     const memories = await memorySystem.search(userPrompt, 3);
     if (memories.length > 0) {
-      memoryContext = '\n\nRelevant context from memory:\n' +
+      memoryContext = '\n\nRelevant context from past tasks (USE FOR KNOWLEDGE ONLY, DO NOT MIMIC ITS FORMATTING):\n' +
         memories.map(m => `- ${m.content}`).join('\n');
     }
   } catch {
@@ -195,15 +195,18 @@ export async function runReasoningLoop(params: {
   const totalDuration = Date.now() - startTime;
 
   // Store result in memory
-  try {
-    await memorySystem.store('task', finalAnswer.substring(0, 1000), {
-      taskId,
-      agentId,
-      model,
-      prompt: userPrompt.substring(0, 200),
-    });
-  } catch {
-    // Memory store failed, non-critical
+  // Store result in memory (skip planner to avoid saving JSON plans as memory)
+  if (agentId !== 'planner') {
+    try {
+      await memorySystem.store('task', finalAnswer.substring(0, 1000), {
+        taskId,
+        agentId,
+        model,
+        prompt: userPrompt.substring(0, 200),
+      });
+    } catch {
+      // Memory store failed, non-critical
+    }
   }
 
   return {
