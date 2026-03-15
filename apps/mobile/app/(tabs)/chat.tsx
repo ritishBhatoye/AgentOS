@@ -37,17 +37,17 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       >
         <View
           style={{
-            backgroundColor: isUser ? '#7c3aed' : '#1e1e2a',
+            backgroundColor: isUser ? '#0EA5E9' : '#121826',
             borderRadius: 16,
             borderTopRightRadius: isUser ? 4 : 16,
             borderTopLeftRadius: isUser ? 16 : 4,
             paddingHorizontal: 14,
             paddingVertical: 10,
             borderWidth: 1,
-            borderColor: isUser ? '#9061f9' : '#2a2a3a',
+            borderColor: isUser ? '#38BDF8' : '#1F2937',
           }}
         >
-          <Text style={{ color: '#e2e8f0', fontSize: 15, lineHeight: 22 }}>
+          <Text style={{ color: '#E5E7EB', fontSize: 15, lineHeight: 22 }}>
             {message.content}
           </Text>
         </View>
@@ -64,18 +64,18 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           {message.model && (
             <View
               style={{
-                backgroundColor: '#7c3aed22',
+                backgroundColor: '#0EA5E922',
                 borderRadius: 8,
                 paddingHorizontal: 6,
                 paddingVertical: 2,
               }}
             >
-              <Text style={{ color: '#a78bfa', fontSize: 10, fontWeight: '600' }}>
+              <Text style={{ color: '#22D3EE', fontSize: 10, fontWeight: '600' }}>
                 {message.model}
               </Text>
             </View>
           )}
-          <Text style={{ color: '#64748b', fontSize: 10 }}>
+          <Text style={{ color: '#6B7280', fontSize: 10 }}>
             {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
@@ -93,12 +93,12 @@ function EmptyChat() {
         <Text style={{ fontSize: 64, marginBottom: 24 }}>💬</Text>
       </AnimateEntrance>
       <AnimateEntrance delay={400}>
-        <Text style={{ color: '#e2e8f0', fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' }}>
+        <Text style={{ color: '#E5E7EB', fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' }}>
           AgentOS Intelligence
         </Text>
       </AnimateEntrance>
       <AnimateEntrance delay={600}>
-        <Text style={{ color: '#64748b', fontSize: 15, textAlign: 'center', lineHeight: 22 }}>
+        <Text style={{ color: '#6B7280', fontSize: 15, textAlign: 'center', lineHeight: 22 }}>
           Your message is routed to the best AI model automatically. Try asking it to write code, research a topic, or plan a project.
         </Text>
       </AnimateEntrance>
@@ -139,7 +139,7 @@ export default function ChatScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: '#0f0f14' }}
+      style={{ flex: 1, backgroundColor: '#0B0F19' }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={90}
     >
@@ -170,29 +170,29 @@ export default function ChatScreen() {
           paddingHorizontal: 12,
           paddingTop: 8,
           paddingBottom: Platform.OS === 'ios' ? 34 : 12,
-          backgroundColor: '#16161e',
+          backgroundColor: '#121826',
           borderTopWidth: 1,
-          borderTopColor: '#1e1e2a',
+          borderTopColor: '#1F2937',
           gap: 8,
         }}
       >
         <TextInput
           style={{
             flex: 1,
-            backgroundColor: '#1a1a24',
+            backgroundColor: '#121826',
             borderRadius: 20,
             paddingHorizontal: 16,
             paddingVertical: 10,
-            color: '#e2e8f0',
+            color: '#E5E7EB',
             fontSize: 15,
             maxHeight: 100,
             borderWidth: 1,
-            borderColor: '#2a2a3a',
+            borderColor: '#1F2937',
           }}
           value={input}
           onChangeText={setInput}
           placeholder="Message AgentOS..."
-          placeholderTextColor="#64748b"
+          placeholderTextColor="#6B7280"
           multiline
           returnKeyType="send"
           onSubmitEditing={handleSend}
@@ -205,7 +205,7 @@ export default function ChatScreen() {
           <MotiView
             animate={{
               scale: input.trim() ? 1 : 0.9,
-              backgroundColor: input.trim() ? '#7c3aed' : '#2a2a3a',
+              backgroundColor: input.trim() ? '#0EA5E9' : '#1F2937',
             }}
             transition={{ type: 'spring', damping: 15 }}
             style={{
@@ -225,7 +225,7 @@ export default function ChatScreen() {
                   exit={{ opacity: 0 }}
                   transition={{ loop: true, type: 'timing', duration: 1000 }}
                 >
-                  <ActivityIndicator size="small" color="#e2e8f0" />
+                  <ActivityIndicator size="small" color="#E5E7EB" />
                 </MotiView>
               ) : (
                 <MotiView

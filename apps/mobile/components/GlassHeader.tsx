@@ -17,19 +17,19 @@ export const GlassHeader = ({ title, subtitle, leftElement, rightElement }: Glas
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             {leftElement || <View style={{ width: 40 }} />}
             <View style={{ alignItems: 'center' }}>
-              <Text style={{ color: '#e2e8f0', fontSize: 17, fontWeight: '700' }}>{title}</Text>
-              {subtitle && <Text style={{ color: '#64748b', fontSize: 11 }}>{subtitle}</Text>}
+              <Text style={{ color: '#E5E7EB', fontSize: 17, fontWeight: '700' }}>{title}</Text>
+              {subtitle && <Text style={{ color: '#6B7280', fontSize: 11 }}>{subtitle}</Text>}
             </View>
             {rightElement || <View style={{ width: 40 }} />}
           </View>
         </BlurView>
       ) : (
-        <View style={{ flex: 1, backgroundColor: '#0f0f14ee', paddingTop: 40, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1e1e2a' }}>
+        <View style={{ flex: 1, backgroundColor: '#0B0F19ee', paddingTop: 40, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1F2937' }}>
            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             {leftElement || <View style={{ width: 40 }} />}
             <View style={{ alignItems: 'center' }}>
-              <Text style={{ color: '#e2e8f0', fontSize: 17, fontWeight: '700' }}>{title}</Text>
-              {subtitle && <Text style={{ color: '#64748b', fontSize: 11 }}>{subtitle}</Text>}
+              <Text style={{ color: '#E5E7EB', fontSize: 17, fontWeight: '700' }}>{title}</Text>
+              {subtitle && <Text style={{ color: '#6B7280', fontSize: 11 }}>{subtitle}</Text>}
             </View>
             {rightElement || <View style={{ width: 40 }} />}
           </View>

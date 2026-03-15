@@ -23,7 +23,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <View style={{ marginBottom: 24 }}>
       <Text
         style={{
-          color: '#64748b',
+          color: '#6B7280',
           fontSize: 11,
           fontWeight: '700',
           textTransform: 'uppercase',
@@ -36,10 +36,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       </Text>
       <View
         style={{
-          backgroundColor: '#16161e',
+          backgroundColor: '#121826',
           borderRadius: 14,
           borderWidth: 1,
-          borderColor: '#1e1e2a',
+          borderColor: '#1F2937',
           overflow: 'hidden',
         }}
       >
@@ -73,14 +73,14 @@ function SettingRow({
         paddingHorizontal: 16,
         paddingVertical: 14,
         borderBottomWidth: 1,
-        borderBottomColor: '#1e1e2a',
+        borderBottomColor: '#1F2937',
         opacity: pressed ? 0.8 : 1,
       })}
     >
-      <Text style={{ color: danger ? '#f87171' : '#e2e8f0', fontSize: 15, fontWeight: '500' }}>
+      <Text style={{ color: danger ? '#f87171' : '#E5E7EB', fontSize: 15, fontWeight: '500' }}>
         {label}
       </Text>
-      {value && <Text style={{ color: '#64748b', fontSize: 13 }}>{value}</Text>}
+      {value && <Text style={{ color: '#6B7280', fontSize: 13 }}>{value}</Text>}
       {rightElement}
     </Pressable>
   );
@@ -154,7 +154,7 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: '#0f0f14' }}
+      style={{ flex: 1, backgroundColor: '#0B0F19' }}
       contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
       showsVerticalScrollIndicator={false}
     >
@@ -165,7 +165,7 @@ export default function SettingsScreen() {
             width: 64,
             height: 64,
             borderRadius: 18,
-            backgroundColor: '#7c3aed',
+            backgroundColor: '#0EA5E9',
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 12,
@@ -173,8 +173,8 @@ export default function SettingsScreen() {
         >
           <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>A</Text>
         </View>
-        <Text style={{ color: '#e2e8f0', fontSize: 22, fontWeight: '800' }}>AgentOS</Text>
-        <Text style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>v0.1.0 Alpha · Mobile Client</Text>
+        <Text style={{ color: '#E5E7EB', fontSize: 22, fontWeight: '800' }}>AgentOS</Text>
+        <Text style={{ color: '#6B7280', fontSize: 13, marginTop: 4 }}>v0.1.0 Alpha · Mobile Client</Text>
       </View>
 
       {/* Backend URL */}
@@ -183,14 +183,14 @@ export default function SettingsScreen() {
           <View style={{ padding: 12, gap: 8 }}>
             <TextInput
               style={{
-                backgroundColor: '#1a1a24',
+                backgroundColor: '#121826',
                 borderRadius: 10,
                 paddingHorizontal: 14,
                 paddingVertical: 10,
-                color: '#e2e8f0',
+                color: '#E5E7EB',
                 fontSize: 14,
                 borderWidth: 1,
-                borderColor: '#2a2a3a',
+                borderColor: '#1F2937',
               }}
               value={apiUrlInput}
               onChangeText={setApiUrlInput}
@@ -204,7 +204,7 @@ export default function SettingsScreen() {
                 onPress={saveApiUrl}
                 style={{
                   flex: 1,
-                  backgroundColor: '#7c3aed',
+                  backgroundColor: '#0EA5E9',
                   borderRadius: 10,
                   padding: 10,
                   alignItems: 'center',
@@ -216,13 +216,13 @@ export default function SettingsScreen() {
                 onPress={() => setIsEditing(false)}
                 style={{
                   flex: 1,
-                  backgroundColor: '#1e1e2a',
+                  backgroundColor: '#1F2937',
                   borderRadius: 10,
                   padding: 10,
                   alignItems: 'center',
                 }}
               >
-                <Text style={{ color: '#94a3b8', fontWeight: '700', fontSize: 14 }}>Cancel</Text>
+                <Text style={{ color: '#6B7280', fontWeight: '700', fontSize: 14 }}>Cancel</Text>
               </Pressable>
             </View>
           </View>
@@ -243,8 +243,8 @@ export default function SettingsScreen() {
             <Switch
               value={notificationsEnabled}
               onValueChange={toggleNotifications}
-              trackColor={{ false: '#1e1e2a', true: '#7c3aed55' }}
-              thumbColor={notificationsEnabled ? '#7c3aed' : '#64748b'}
+              trackColor={{ false: '#1F2937', true: '#0EA5E955' }}
+              thumbColor={notificationsEnabled ? '#0EA5E9' : '#6B7280'}
             />
           }
         />

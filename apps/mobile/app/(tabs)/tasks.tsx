@@ -17,10 +17,10 @@ import { useTasks, TaskItem } from '../../hooks/useTasks';
 // ─── Status Badge ──────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: string }> = {
-  pending: { bg: '#3b82f622', text: '#60a5fa', icon: '⏳' },
-  running: { bg: '#eab30822', text: '#facc15', icon: '🔄' },
-  completed: { bg: '#22c55e22', text: '#4ade80', icon: '✅' },
-  failed: { bg: '#ef444422', text: '#f87171', icon: '❌' },
+  pending: { bg: '#0EA5E922', text: '#38BDF8', icon: '⏳' },
+  running: { bg: '#fbbf2422', text: '#fbbf24', icon: '🔄' },
+  completed: { bg: '#00FF9C22', text: '#00FF9C', icon: '✅' },
+  failed: { bg: '#f8717122', text: '#f87171', icon: '❌' },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -52,41 +52,41 @@ function TaskCard({ task, onPress }: { task: TaskItem; onPress: () => void }) {
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({
-        backgroundColor: '#16161e',
+        backgroundColor: '#121826',
         borderRadius: 14,
         padding: 14,
         marginHorizontal: 16,
         marginVertical: 5,
         borderWidth: 1,
-        borderColor: '#1e1e2a',
+        borderColor: '#1F2937',
         opacity: pressed ? 0.85 : 1,
       })}
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <Text style={{ color: '#64748b', fontSize: 11, fontFamily: 'SpaceMono' }}>
+        <Text style={{ color: '#6B7280', fontSize: 11, fontFamily: 'SpaceMono' }}>
           {task.id.substring(0, 8)}...
         </Text>
         <StatusBadge status={task.status} />
       </View>
-      <Text style={{ color: '#e2e8f0', fontSize: 14, fontWeight: '600', marginBottom: 6 }} numberOfLines={2}>
+      <Text style={{ color: '#E5E7EB', fontSize: 14, fontWeight: '600', marginBottom: 6 }} numberOfLines={2}>
         {task.prompt}
       </Text>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <View style={{ backgroundColor: '#7c3aed22', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-            <Text style={{ color: '#a78bfa', fontSize: 10, fontWeight: '600' }}>
+          <View style={{ backgroundColor: '#0EA5E922', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+            <Text style={{ color: '#38BDF8', fontSize: 10, fontWeight: '600' }}>
               {task.type}
             </Text>
           </View>
           {task.assignedTo && (
-            <View style={{ backgroundColor: '#06b6d422', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ color: '#22d3ee', fontSize: 10, fontWeight: '600' }}>
+            <View style={{ backgroundColor: '#22D3EE22', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+              <Text style={{ color: '#22D3EE', fontSize: 10, fontWeight: '600' }}>
                 {task.assignedTo}
               </Text>
             </View>
           )}
         </View>
-        <Text style={{ color: '#475569', fontSize: 10 }}>
+        <Text style={{ color: '#4B5563', fontSize: 10 }}>
           {new Date(task.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
       </View>
@@ -107,25 +107,25 @@ function StatsRow({ stats }: { stats: { total: number; running: number; complete
       }}
     >
       {[
-        { label: 'Total', value: stats.total, color: '#60a5fa' },
-        { label: 'Running', value: stats.running, color: '#facc15' },
-        { label: 'Done', value: stats.completed, color: '#4ade80' },
+        { label: 'Total', value: stats.total, color: '#38BDF8' },
+        { label: 'Running', value: stats.running, color: '#fbbf24' },
+        { label: 'Done', value: stats.completed, color: '#00FF9C' },
         { label: 'Failed', value: stats.failed, color: '#f87171' },
       ].map(s => (
         <View
           key={s.label}
           style={{
             flex: 1,
-            backgroundColor: '#16161e',
+            backgroundColor: '#121826',
             borderRadius: 10,
             padding: 10,
             alignItems: 'center',
             borderWidth: 1,
-            borderColor: '#1e1e2a',
+            borderColor: '#1F2937',
           }}
         >
           <Text style={{ color: s.color, fontSize: 18, fontWeight: '800' }}>{s.value}</Text>
-          <Text style={{ color: '#64748b', fontSize: 10, marginTop: 2 }}>{s.label}</Text>
+          <Text style={{ color: '#6B7280', fontSize: 10, marginTop: 2 }}>{s.label}</Text>
         </View>
       ))}
     </View>
@@ -160,16 +160,16 @@ export default function TasksScreen() {
   const keyExtractor = useCallback((item: TaskItem) => item.id, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0f0f14' }}>
+    <View style={{ flex: 1, backgroundColor: '#0B0F19' }}>
       {stats && <StatsRow stats={stats} />}
 
       {tasks.length === 0 && !isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
           <Text style={{ fontSize: 48, marginBottom: 12 }}>📋</Text>
-          <Text style={{ color: '#e2e8f0', fontSize: 18, fontWeight: '700', marginBottom: 6 }}>
+          <Text style={{ color: '#E5E7EB', fontSize: 18, fontWeight: '700', marginBottom: 6 }}>
             No Tasks Yet
           </Text>
-          <Text style={{ color: '#64748b', fontSize: 13, textAlign: 'center' }}>
+          <Text style={{ color: '#6B7280', fontSize: 13, textAlign: 'center' }}>
             Tasks appear here when AI agents process your requests
           </Text>
         </View>
@@ -183,8 +183,8 @@ export default function TasksScreen() {
             <RefreshControl
               refreshing={isLoading}
               onRefresh={refresh}
-              tintColor="#7c3aed"
-              colors={['#7c3aed']}
+              tintColor="#0EA5E9"
+              colors={['#0EA5E9']}
             />
           }
           showsVerticalScrollIndicator={false}

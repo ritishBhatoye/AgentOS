@@ -61,7 +61,7 @@ interface IconBadgeProps {
   bgColor?: string;
 }
 
-export function IconBadge({ name, size = 40, bgColor = '#7c3aed22' }: IconBadgeProps) {
+export function IconBadge({ name, size = 40, bgColor = '#0EA5E922' }: IconBadgeProps) {
   return (
     <View
       style={{
