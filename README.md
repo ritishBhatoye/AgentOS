@@ -1,159 +1,142 @@
-# Turborepo starter
+# 🚀 AgentOS — AI Agent Platform
 
-This Turborepo starter is maintained by the Turborepo core team.
+> A multi-agent AI operating system built with Next.js, Expo, and Ollama.  
+> Open-source, local-first, zero infrastructure cost.
 
-## Using this example
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)
+![Expo](https://img.shields.io/badge/Expo-1B1F23?style=for-the-badge&logo=expo&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-FF6F00?style=for-the-badge&logo=data:image/png;base64,&logoColor=white)
 
-Run the following command:
+## ✨ Features
 
-```sh
-npx create-turbo@latest
+- 🤖 **Multi-Agent System** — Planner, Coding, Research, and Execution agents
+- 🔀 **Intelligent Model Router** — Auto-selects the best model per task type
+- 💬 **AI Chat Interface** — Conversational AI with context memory
+- 📊 **Monitoring Dashboard** — Real-time agent status, task queue, and system logs
+- 🧠 **Memory System** — Short-term, long-term, and persistent memory
+- 🛠️ **Tool System** — Web search, code execution, file I/O, browser automation
+- 📱 **Mobile App** — Expo React Native companion app
+- ⚡ **Local-First** — Runs entirely on your machine with Ollama
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│                 Clients                      │
+│  ┌──────────┐          ┌──────────────┐     │
+│  │ Next.js  │          │ Expo Mobile  │     │
+│  │ Dashboard │          │    App       │     │
+│  └─────┬────┘          └──────┬───────┘     │
+│        └──────────┬───────────┘             │
+│              REST API                        │
+├─────────────────────────────────────────────┤
+│            AI Backend (Express)              │
+│  ┌──────┐  ┌──────┐  ┌────────┐  ┌──────┐ │
+│  │Router│  │Agents│  │ Tools  │  │Memory│ │
+│  └──┬───┘  └──┬───┘  └──┬─────┘  └──┬───┘ │
+├─────┼─────────┼─────────┼───────────┼──────┤
+│     │    Ollama (Local LLMs)         │      │
+│  ┌──┴────┐ ┌──┴────┐ ┌──┴────────┐ │      │
+│  │Llama3 │ │Mistral│ │DeepSeek   │ │      │
+│  │       │ │       │ │  Coder    │ │      │
+│  └───────┘ └───────┘ └───────────┘ │      │
+│                              ┌─────┴────┐  │
+│                              │SQLite +   │  │
+│                              │Chroma     │  │
+│                              └──────────┘  │
+└─────────────────────────────────────────────┘
 ```
 
-## What's inside?
+## 📁 Project Structure
 
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```
+AgentOS/
+├── apps/
+│   ├── web/           → Next.js Dashboard
+│   └── mobile/        → Expo Mobile App
+├── services/
+│   └── ai-backend/    → Express AI Server
+├── packages/
+│   ├── types/         → Shared TypeScript types
+│   ├── ui/            → Shared UI components
+│   └── config/        → Shared configs
+├── turbo.json         → Turborepo config
+└── package.json       → Root workspace
 ```
 
-Without global `turbo`, use your package manager:
+## 🚀 Quick Start
 
-```sh
-cd my-turborepo
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+### Prerequisites
+
+- Node.js 18+
+- [Ollama](https://ollama.ai/) installed and running
+- Git
+
+### 1. Install Ollama Models
+
+```bash
+ollama pull llama3
+ollama pull mistral
+ollama pull deepseek-coder
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+### 2. Clone & Install
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo build --filter=docs
+```bash
+git clone <your-repo-url> AgentOS
+cd AgentOS
+npm install
 ```
 
-Without global `turbo`:
+### 3. Start Development
 
-```sh
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+```bash
+# Start all services (web + backend)
+npm run dev
 ```
 
-### Develop
+- 🌐 **Web Dashboard**: http://localhost:3000
+- ⚡ **AI Backend**: http://localhost:4000
+- 📱 **Mobile**: Start separately with `cd apps/mobile && npx expo start`
 
-To develop all apps and packages, run the following command:
+## 📡 API Endpoints
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/chat` | Send a chat message |
+| `POST` | `/api/chat/stream` | Streaming chat response |
+| `POST` | `/api/agents/execute` | Execute agent task |
+| `GET`  | `/api/agents/status` | Get agent statuses |
+| `GET`  | `/api/tasks` | List all tasks |
+| `GET`  | `/api/models` | List available models |
+| `GET`  | `/api/health` | System health check |
+| `GET`  | `/api/health/logs` | Get system logs |
 
-```sh
-cd my-turborepo
-turbo dev
-```
+## 🤖 Agents
 
-Without global `turbo`, use your package manager:
+| Agent | Specialization | Default Model |
+|-------|---------------|---------------|
+| 🧠 Planner | Task decomposition & planning | Llama3 |
+| 💻 Coding | Code generation & debugging | DeepSeek-Coder |
+| 🔍 Research | Information gathering & analysis | Llama3/Mistral |
+| ⚙️ Execution | Command execution & automation | Llama3 |
 
-```sh
-cd my-turborepo
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
+## 🔀 Model Routing
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+The model router automatically selects the best AI model based on task type:
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+| Task Type | Primary Model | Fallback |
+|-----------|--------------|----------|
+| Coding | deepseek-coder | llama3 |
+| Reasoning | llama3 | mistral |
+| Conversation | mistral | llama3 |
+| Analysis | llama3 | deepseek-coder |
 
-```sh
-turbo dev --filter=web
-```
+## 📋 License
 
-Without global `turbo`:
+MIT License — Build amazing things.
 
-```sh
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
+---
 
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+Built with ❤️ by Ritish Bhatoye
