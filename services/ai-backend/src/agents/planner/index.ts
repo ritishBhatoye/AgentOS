@@ -11,24 +11,37 @@ import { SystemLogger } from '../../utils/logger.js';
 
 const logger = new SystemLogger('PlannerAgent');
 
-const SYSTEM_PROMPT = `You are the Planner Agent for AgentOS. Your job is to analyze user requests and decompose them into clear, actionable subtasks.
+const SYSTEM_PROMPT = `You are the Planner Agent for AgentOS. Your job is to analyze user requests and decompose them into a structured execution plan.
 
-For each request, output a structured plan in this format:
+You MUST output your plan as a valid JSON object followed by your reasoning.
 
-STRATEGY: [Brief description of your approach]
+FORMAT:
+\`\`\`json
+{
+  "strategy": "Brief description of your approach",
+  "tasks": [
+    {
+      "type": "coding",
+      "prompt": "Description of the coding task"
+    },
+    {
+      "type": "research",
+      "prompt": "Description of the research task"
+    },
+    {
+      "type": "execution",
+      "prompt": "Description of the execution/testing task"
+    }
+  ]
+}
+\`\`\`
 
-TASKS:
-1. [CODING] Task description
-2. [RESEARCH] Task description
-3. [EXECUTION] Task description
-
-Valid task types: CODING, RESEARCH, EXECUTION, ANALYSIS
+Valid task types: coding, research, execution, architecture, review, debug.
 
 Rules:
-- Keep tasks specific and actionable
-- Order by dependency
-- Each task should be doable by a single specialized agent
-- If the request is simple enough to handle directly, just answer it without creating subtasks`;
+- Order tasks by dependency.
+- Each task should be focused and doable by a specialized agent.
+- If the request is simple enough to handle directly, still format it as a single task.`;
 
 export class PlannerAgent implements BaseAgent {
   info: AgentInfo = {
@@ -83,11 +96,29 @@ export class PlannerAgent implements BaseAgent {
   }
 
   private parseSubtasks(output: string): Array<{ type: string; prompt: string; tools: string[] }> {
+    try {
+      // Try to find a JSON block in the output
+      const jsonMatch = output.match(/\{[\s\S]*"tasks"[\s\S]*\}/);
+      if (jsonMatch) {
+        const data = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(data.tasks)) {
+          return data.tasks.map((t: any) => ({
+            type: t.type || 'research',
+            prompt: t.prompt || String(t),
+            tools: t.tools || [],
+          }));
+        }
+      }
+    } catch (e) {
+      logger.warn('Failed to parse JSON subtasks, falling back to line parsing', { error: e });
+    }
+
+    // Fallback: simple line parsing if JSON fails
     const subtasks: Array<{ type: string; prompt: string; tools: string[] }> = [];
     const lines = output.split('\n');
 
     for (const line of lines) {
-      const match = line.match(/^\d+\.\s*\[(CODING|RESEARCH|EXECUTION|ANALYSIS)\]\s*(.+)/i);
+      const match = line.match(/^\d+\.\s*\[?(CODING|RESEARCH|EXECUTION|ANALYSIS|ARCHITECTURE|DEBUG)\]?\s*[:\-\s]*(.+)/i);
       if (match) {
         subtasks.push({
           type: match[1].toLowerCase(),

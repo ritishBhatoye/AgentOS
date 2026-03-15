@@ -273,7 +273,7 @@ class CodeGraphEngine {
       scannedAt: new Date().toISOString(),
     };
 
-    logger.info('Scan complete', result);
+    logger.info('Scan complete', result as any);
     return result;
   }
 

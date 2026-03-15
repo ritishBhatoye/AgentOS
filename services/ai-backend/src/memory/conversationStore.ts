@@ -2,11 +2,13 @@
 // AgentOS — In-Memory Conversation Store
 // ============================================================
 
-interface StoredMessage {
+export interface StoredMessage {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   model?: string;
+  taskId?: string;
+  taskStatus?: string;
   timestamp: string;
 }
 

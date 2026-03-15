@@ -32,7 +32,7 @@ tasksRouter.get('/', (req: Request, res: Response) => {
 // ─── GET /api/tasks/:id ───────────────────────────────────
 
 tasksRouter.get('/:id', (req: Request, res: Response) => {
-  const task = taskQueue.getTask(req.params.id);
+  const task = taskQueue.getTask(req.params.id as string);
   if (!task) {
     res.status(404).json({ success: false, error: { message: 'Task not found' } });
     return;

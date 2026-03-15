@@ -33,14 +33,14 @@ const MODEL_REGISTRY: ModelProfile[] = [
     name: 'DeepSeek Coder',
     contextWindow: 16384,
     strengths: ['coding'],
-    priority: 1,
+    priority: 0,
   },
   {
     id: 'llama3',
     name: 'Llama 3',
     contextWindow: 8192,
     strengths: ['reasoning', 'planning', 'analysis'],
-    priority: 1,
+    priority: 0,
   },
   {
     id: 'mistral',
@@ -54,7 +54,7 @@ const MODEL_REGISTRY: ModelProfile[] = [
     name: 'Llama 3.2 1B (Fast)',
     contextWindow: 131072,
     strengths: ['conversation', 'reasoning', 'planning', 'analysis'],
-    priority: 0, // Highest priority to ensure it's picked if available
+    priority: 2,
   },
 ];
 

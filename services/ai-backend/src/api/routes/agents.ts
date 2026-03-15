@@ -67,7 +67,7 @@ agentRouter.post('/execute', async (req: Request, res: Response, next: NextFunct
 // ─── GET /api/agents/:id ──────────────────────────────────
 
 agentRouter.get('/:id', (req: Request, res: Response) => {
-  const agent = agentOrchestrator.getAgent(req.params.id);
+  const agent = agentOrchestrator.getAgent(req.params.id as string);
   if (!agent) {
     res.status(404).json({ success: false, error: { message: 'Agent not found' } });
     return;
