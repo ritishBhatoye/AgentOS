@@ -2,7 +2,7 @@
 // AgentOS Mobile — SSE Client
 // ============================================================
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeStorage } from './storage';
 
 const DEFAULT_URL = 'http://localhost:4000';
 
@@ -22,7 +22,7 @@ export function connectSSE(onEvent: SSECallback, onError?: (err: Error) => void)
   const controller = new AbortController();
 
   (async () => {
-    const base = (await AsyncStorage.getItem('agentos_api_url')) || DEFAULT_URL;
+    const base = (await safeStorage.getItem('agentos_api_url')) || DEFAULT_URL;
     const url = `${base}/api/events`;
 
     try {

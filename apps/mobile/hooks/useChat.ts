@@ -4,7 +4,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { sendChatMessage } from '../lib/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeStorage } from '../lib/storage';
 
 export interface ChatMessage {
   id: string;
@@ -23,14 +23,14 @@ export function useChat() {
 
   const loadCachedMessages = useCallback(async () => {
     try {
-      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      const cached = await safeStorage.getItem(CACHE_KEY);
       if (cached) setMessages(JSON.parse(cached));
     } catch {}
   }, []);
 
   const cacheMessages = useCallback(async (msgs: ChatMessage[]) => {
     try {
-      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(msgs.slice(-50)));
+      await safeStorage.setItem(CACHE_KEY, JSON.stringify(msgs.slice(-50)));
     } catch {}
   }, []);
 
@@ -84,7 +84,7 @@ export function useChat() {
   const clearChat = useCallback(async () => {
     setMessages([]);
     conversationIdRef.current = null;
-    await AsyncStorage.removeItem(CACHE_KEY);
+    await safeStorage.removeItem(CACHE_KEY);
   }, []);
 
   return { messages, isLoading, send, clearChat, loadCachedMessages };

@@ -2,12 +2,12 @@
 // AgentOS Mobile — API Client
 // ============================================================
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeStorage } from './storage';
 
 const DEFAULT_URL = 'http://localhost:4000';
 
 async function getBaseUrl(): Promise<string> {
-  const stored = await AsyncStorage.getItem('agentos_api_url');
+  const stored = await safeStorage.getItem('agentos_api_url');
   return stored || DEFAULT_URL;
 }
 
@@ -83,7 +83,7 @@ export async function searchMemory(query: string) {
 // ─── Settings ────────────────────────────────────────────
 
 export async function setApiUrl(url: string) {
-  await AsyncStorage.setItem('agentos_api_url', url);
+  await safeStorage.setItem('agentos_api_url', url);
 }
 
 export async function getApiUrl(): Promise<string> {

@@ -12,7 +12,7 @@ import {
   Alert,
   Switch,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeStorage } from '../../lib/storage';
 import { setApiUrl, getApiUrl } from '../../lib/api';
 import { registerForPushNotifications } from '../../lib/notifications';
 
@@ -99,7 +99,7 @@ export default function SettingsScreen() {
     hasLoaded.current = true;
     const url = await getApiUrl();
     setApiUrlInput(url);
-    const notifPref = await AsyncStorage.getItem('agentos_notifications');
+    const notifPref = await safeStorage.getItem('agentos_notifications');
     setNotificationsEnabled(notifPref !== 'false');
   }, []);
   loadSettings();
@@ -114,7 +114,7 @@ export default function SettingsScreen() {
 
   const toggleNotifications = useCallback(async (val: boolean) => {
     setNotificationsEnabled(val);
-    await AsyncStorage.setItem('agentos_notifications', val.toString());
+    await safeStorage.setItem('agentos_notifications', val.toString());
     if (val) {
       const granted = await registerForPushNotifications();
       if (!granted) {
@@ -131,7 +131,7 @@ export default function SettingsScreen() {
         text: 'Clear',
         style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.removeItem('agentos_chat_history');
+          await safeStorage.removeItem('agentos_chat_history');
           Alert.alert('✅ Done', 'Chat history cleared');
         },
       },
@@ -145,7 +145,7 @@ export default function SettingsScreen() {
         text: 'Clear',
         style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.removeItem('agentos_memory_cache');
+          await safeStorage.removeItem('agentos_memory_cache');
           Alert.alert('✅ Done', 'Memory cache cleared');
         },
       },
