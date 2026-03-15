@@ -9,9 +9,14 @@ import { PlannerAgent } from './planner/index.js';
 import { CodingAgent } from './coding/index.js';
 import { ResearchAgent } from './research/index.js';
 import { ExecutionAgent } from './execution/index.js';
+import { ArchitectAgent } from './architect/index.js';
+import { ReviewerAgent } from './reviewer/index.js';
+import { DebuggerAgent } from './debugger/index.js';
 import { taskQueue, QueuedTask } from './taskQueue.js';
 import { classifyTask } from '../router/selectModel.js';
 import { eventBus } from '../events/eventBus.js';
+import { recordRun } from '../db/sqlite.js';
+import { incrementCounter, recordLatency } from '../metrics/index.js';
 import { SystemLogger } from '../utils/logger.js';
 
 const logger = new SystemLogger('Orchestrator');
@@ -40,6 +45,9 @@ class AgentOrchestrator {
     this.agents.set('coding', new CodingAgent());
     this.agents.set('research', new ResearchAgent());
     this.agents.set('execution', new ExecutionAgent());
+    this.agents.set('architect', new ArchitectAgent());
+    this.agents.set('reviewer', new ReviewerAgent());
+    this.agents.set('debugger', new DebuggerAgent());
 
     logger.info('Agent Orchestrator initialized', {
       agents: Array.from(this.agents.keys()),
@@ -90,6 +98,18 @@ class AgentOrchestrator {
     eventBus.emit(result.success ? 'task:completed' : 'task:failed', {
       taskId, agentId, duration: Date.now() - startTime,
     });
+
+    // Record run history
+    const duration = Date.now() - startTime;
+    try {
+      recordRun({
+        id: uuid(), taskId, agentId, model: result.modelUsed,
+        prompt: prompt.substring(0, 2000), output: result.output?.substring(0, 5000),
+        success: result.success, durationMs: duration,
+      });
+      incrementCounter('agent_runs', { agent: agentId });
+      recordLatency('task_latency_ms', duration, { agent: agentId });
+    } catch {}
 
     return {
       taskId,
@@ -207,6 +227,11 @@ class AgentOrchestrator {
       execution: 'execution',
       analysis: 'research',
       planning: 'planner',
+      architecture: 'architect',
+      design: 'architect',
+      review: 'reviewer',
+      debug: 'debugger',
+      fix: 'debugger',
     };
     return mapping[type.toLowerCase()] || 'research';
   }

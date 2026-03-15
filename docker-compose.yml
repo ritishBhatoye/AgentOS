@@ -1,47 +1,43 @@
-# ============================================================
-# AgentOS — Docker Compose
-# Full stack: Web + Backend + Ollama
-# ============================================================
-
-version: '3.9'
+version: '3.8'
 
 services:
-  # ─── AI Backend ─────────────────────────────────────────
-  ai-backend:
+  # ─── AI Backend ──────────────────────────────────────────
+  backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ./services/ai-backend
+      dockerfile: Dockerfile
     ports:
       - "4000:4000"
     environment:
       - PORT=4000
       - NODE_ENV=production
       - OLLAMA_HOST=http://ollama:11434
+      - DATABASE_PATH=/app/data/agentos.db
+    volumes:
+      - backend-data:/app/data
     depends_on:
       - ollama
-    volumes:
-      - backend-workspace:/app/services/ai-backend/workspace
-      - backend-data:/app/services/ai-backend/data
     restart: unless-stopped
-    networks:
-      - agentos
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # ─── Web Dashboard ─────────────────────────────────────
+  # ─── Next.js Dashboard ───────────────────────────────────
   web:
     build:
-      context: .
-      dockerfile: Dockerfile.web
+      context: ./apps/web
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
     depends_on:
-      - ai-backend
+      - backend
     restart: unless-stopped
-    networks:
-      - agentos
 
-  # ─── Ollama (Local AI Models) ──────────────────────────
+  # ─── Ollama (Local AI Models) ────────────────────────────
   ollama:
     image: ollama/ollama:latest
     ports:
@@ -49,33 +45,11 @@ services:
     volumes:
       - ollama-models:/root/.ollama
     restart: unless-stopped
-    networks:
-      - agentos
     deploy:
       resources:
         reservations:
           memory: 4G
 
-  # ─── Chroma Vector DB ─────────────────────────────────
-  chroma:
-    image: chromadb/chroma:latest
-    ports:
-      - "8000:8000"
-    volumes:
-      - chroma-data:/chroma/chroma
-    environment:
-      - IS_PERSISTENT=TRUE
-      - ANONYMIZED_TELEMETRY=FALSE
-    restart: unless-stopped
-    networks:
-      - agentos
-
 volumes:
-  ollama-models:
-  chroma-data:
-  backend-workspace:
   backend-data:
-
-networks:
-  agentos:
-    driver: bridge
+  ollama-models:
