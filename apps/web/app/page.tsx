@@ -11,6 +11,15 @@ interface HealthData {
   agents: Record<string, { id: string; name: string; status: string; description: string; capabilities: string[] }>;
   tasks: { total: number; pending: number; running: number; completed: number; failed: number };
   conversations: { total: number; totalMessages: number };
+  memory?: { shortTerm: any; longTerm: { total: number; byType: Record<string, number> } };
+  tools?: string[];
+  sseClients?: number;
+}
+
+interface SSEEvent {
+  type: string;
+  data: Record<string, unknown>;
+  timestamp: string;
 }
 
 interface ConversationMessage {
@@ -25,7 +34,7 @@ interface ConversationMessage {
 const API_BASE = "http://localhost:4000/api";
 
 // ─── Navigation ────────────────────────────────────────────
-type Page = "dashboard" | "chat" | "agents" | "tasks" | "models" | "logs";
+type Page = "dashboard" | "chat" | "agents" | "tasks" | "models" | "events" | "memory" | "logs";
 
 const NAV_ITEMS: Array<{ id: Page; icon: string; label: string }> = [
   { id: "dashboard", icon: "📊", label: "Dashboard" },
@@ -33,6 +42,8 @@ const NAV_ITEMS: Array<{ id: Page; icon: string; label: string }> = [
   { id: "agents", icon: "🤖", label: "Agents" },
   { id: "tasks", icon: "📋", label: "Tasks" },
   { id: "models", icon: "🧠", label: "Models" },
+  { id: "events", icon: "⚡", label: "Live Events" },
+  { id: "memory", icon: "🧬", label: "Memory" },
   { id: "logs", icon: "📝", label: "Logs" },
 ];
 
@@ -41,6 +52,26 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
   const [health, setHealth] = useState<HealthData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sseEvents, setSseEvents] = useState<SSEEvent[]>([]);
+
+  // SSE Connection
+  useEffect(() => {
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`${API_BASE}/events`);
+      const eventTypes = ['agent:status', 'agent:thought', 'agent:tool_call', 'agent:tool_result', 'agent:output', 'task:created', 'task:completed', 'task:failed', 'system:log', 'memory:stored'];
+      eventTypes.forEach(type => {
+        es!.addEventListener(type, (e: MessageEvent) => {
+          try {
+            const event = JSON.parse(e.data) as SSEEvent;
+            setSseEvents(prev => [...prev.slice(-200), event]);
+          } catch {}
+        });
+      });
+      es.onerror = () => { /* reconnect handled by browser */ };
+    } catch {}
+    return () => { es?.close(); };
+  }, []);
 
   const fetchHealth = useCallback(async () => {
     try {
@@ -124,7 +155,7 @@ export default function Dashboard() {
           <div className="header-actions">
             <div className="header-status">
               <span className={`status-dot ${health ? "online" : "offline"}`} />
-              {health?.status === "healthy" ? "System Healthy" : "System Offline"}
+              {health?.status === "healthy" ? "System Healthy" : health ? "Degraded (no Ollama)" : "System Offline"}
             </div>
           </div>
         </header>
@@ -135,6 +166,8 @@ export default function Dashboard() {
           {currentPage === "agents" && <AgentsPage health={health} />}
           {currentPage === "tasks" && <TasksPage />}
           {currentPage === "models" && <ModelsPage health={health} />}
+          {currentPage === "events" && <EventsPage events={sseEvents} />}
+          {currentPage === "memory" && <MemoryPage />}
           {currentPage === "logs" && <LogsPage />}
         </div>
       </main>
@@ -691,6 +724,188 @@ function LogsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Events Page (SSE Live Feed) ──────────────────────────
+function EventsPage({ events }: { events: SSEEvent[] }) {
+  const getEventIcon = (type: string) => {
+    if (type.startsWith('agent:thought')) return '💭';
+    if (type.startsWith('agent:tool')) return '🔧';
+    if (type.startsWith('agent:output')) return '📤';
+    if (type.startsWith('agent:status')) return '🤖';
+    if (type.startsWith('task:created')) return '📋';
+    if (type.startsWith('task:completed')) return '✅';
+    if (type.startsWith('task:failed')) return '❌';
+    if (type.startsWith('memory')) return '🧬';
+    return '⚡';
+  };
+
+  const getEventColor = (type: string) => {
+    if (type.includes('completed')) return 'badge-success';
+    if (type.includes('failed')) return 'badge-danger';
+    if (type.includes('tool')) return 'badge-warning';
+    if (type.includes('thought')) return 'badge-info';
+    return 'badge-purple';
+  };
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <div className="card-title">⚡ Live Agent Events</div>
+          <div className="card-subtitle">Real-time SSE stream from the AI backend ({events.length} events)</div>
+        </div>
+      </div>
+      {events.length > 0 ? (
+        <div style={{ maxHeight: "calc(100vh - 260px)", overflowY: "auto" }}>
+          {[...events].reverse().map((event, i) => (
+            <div key={i} className="log-entry">
+              <span className="log-time">
+                {new Date(event.timestamp).toLocaleTimeString()}
+              </span>
+              <span style={{ marginRight: 8 }}>{getEventIcon(event.type)}</span>
+              <span className={`badge ${getEventColor(event.type)}`} style={{ marginRight: 8 }}>
+                {event.type}
+              </span>
+              <span className="log-message" style={{ fontSize: 12 }}>
+                {JSON.stringify(event.data).substring(0, 200)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <div className="empty-state-icon">⚡</div>
+          <p className="empty-state-text">Waiting for events...</p>
+          <p className="empty-state-subtext">Events stream in real-time when agents process requests</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Memory Page ──────────────────────────────────────────
+function MemoryPage() {
+  const [entries, setEntries] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    const fetchMemory = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/memory`);
+        const data = await res.json();
+        if (data.success) {
+          setEntries(data.data.entries);
+          setStats(data.data.stats);
+        }
+      } catch {}
+    };
+    fetchMemory();
+    const interval = setInterval(fetchMemory, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) { setSearchResults(null); return; }
+    try {
+      const res = await fetch(`${API_BASE}/memory/search?q=${encodeURIComponent(searchQuery)}`);
+      const data = await res.json();
+      if (data.success) setSearchResults(data.data);
+    } catch {}
+  };
+
+  const displayEntries = searchResults || entries;
+
+  return (
+    <>
+      {stats && (
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-icon purple">🧬</div>
+            <div className="stat-info">
+              <div className="stat-value">{stats.longTerm?.total || 0}</div>
+              <div className="stat-label">Total Memories</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon cyan">💬</div>
+            <div className="stat-info">
+              <div className="stat-value">{stats.shortTerm?.conversations || 0}</div>
+              <div className="stat-label">Active Conversations</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon blue">📝</div>
+            <div className="stat-info">
+              <div className="stat-value">{stats.shortTerm?.totalTurns || 0}</div>
+              <div className="stat-label">Conversation Turns</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 8, padding: 4 }}>
+          <input
+            style={{
+              flex: 1, background: "var(--bg-tertiary)", border: "1px solid var(--border)",
+              borderRadius: "var(--radius-md)", padding: "10px 14px", color: "var(--text-primary)",
+              fontSize: 14, outline: "none"
+            }}
+            placeholder="Search memory..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+          />
+          <button className="btn btn-primary" onClick={handleSearch}>Search</button>
+          {searchResults && (
+            <button className="btn" style={{ background: "var(--bg-tertiary)" }} onClick={() => setSearchResults(null)}>Clear</button>
+          )}
+        </div>
+      </div>
+
+      {/* Entries */}
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <div className="card-title">🧬 Memory Entries</div>
+            <div className="card-subtitle">{searchResults ? `${searchResults.length} search results` : `${entries.length} stored memories`}</div>
+          </div>
+        </div>
+        {displayEntries.length > 0 ? (
+          <div style={{ maxHeight: "calc(100vh - 400px)", overflowY: "auto" }}>
+            {displayEntries.map((entry: any) => (
+              <div key={entry.id} style={{
+                padding: "12px 16px", borderBottom: "1px solid var(--border)",
+                fontSize: 13
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span className={`badge ${entry.type === 'conversation' ? 'badge-info' : entry.type === 'task' ? 'badge-warning' : 'badge-purple'}`}>
+                    {entry.type}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    {new Date(entry.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                <div style={{ color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  {entry.content.substring(0, 300)}{entry.content.length > 300 ? "..." : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-state-icon">🧬</div>
+            <p className="empty-state-text">No memories stored yet</p>
+            <p className="empty-state-subtext">Memories are created when agents process tasks and conversations</p>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
