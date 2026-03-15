@@ -15,6 +15,10 @@ import {
 } from 'react-native';
 import { useChat, ChatMessage } from '../../hooks/useChat';
 import { AgentIcon } from '../../components/icons/AgentIcon';
+import { AnimateEntrance } from '../../components/AnimateEntrance';
+import { GlassHeader } from '../../components/GlassHeader';
+import { MotiView, AnimatePresence } from 'moti';
+import { View as MotiPlainView } from 'moti';
 
 // ─── Message Bubble ────────────────────────────────────────
 
@@ -22,57 +26,61 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
 
   return (
-    <View
-      style={{
-        alignSelf: isUser ? 'flex-end' : 'flex-start',
-        maxWidth: '82%',
-        marginVertical: 4,
-        marginHorizontal: 12,
-      }}
-    >
+    <AnimateEntrance initialY={20} duration={400}>
       <View
         style={{
-          backgroundColor: isUser ? '#7c3aed' : '#1e1e2a',
-          borderRadius: 16,
-          borderTopRightRadius: isUser ? 4 : 16,
-          borderTopLeftRadius: isUser ? 16 : 4,
-          paddingHorizontal: 14,
-          paddingVertical: 10,
+          alignSelf: isUser ? 'flex-end' : 'flex-start',
+          maxWidth: '82%',
+          marginVertical: 4,
+          marginHorizontal: 12,
         }}
       >
-        <Text style={{ color: '#e2e8f0', fontSize: 15, lineHeight: 22 }}>
-          {message.content}
-        </Text>
+        <View
+          style={{
+            backgroundColor: isUser ? '#7c3aed' : '#1e1e2a',
+            borderRadius: 16,
+            borderTopRightRadius: isUser ? 4 : 16,
+            borderTopLeftRadius: isUser ? 16 : 4,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderWidth: 1,
+            borderColor: isUser ? '#9061f9' : '#2a2a3a',
+          }}
+        >
+          <Text style={{ color: '#e2e8f0', fontSize: 15, lineHeight: 22 }}>
+            {message.content}
+          </Text>
+        </View>
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: isUser ? 'flex-end' : 'flex-start',
+            alignItems: 'center',
+            marginTop: 4,
+            paddingHorizontal: 4,
+            gap: 6,
+          }}
+        >
+          {message.model && (
+            <View
+              style={{
+                backgroundColor: '#7c3aed22',
+                borderRadius: 8,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+              }}
+            >
+              <Text style={{ color: '#a78bfa', fontSize: 10, fontWeight: '600' }}>
+                {message.model}
+              </Text>
+            </View>
+          )}
+          <Text style={{ color: '#64748b', fontSize: 10 }}>
+            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        </View>
       </View>
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: isUser ? 'flex-end' : 'flex-start',
-          alignItems: 'center',
-          marginTop: 4,
-          paddingHorizontal: 4,
-          gap: 6,
-        }}
-      >
-        {message.model && (
-          <View
-            style={{
-              backgroundColor: '#7c3aed22',
-              borderRadius: 8,
-              paddingHorizontal: 6,
-              paddingVertical: 2,
-            }}
-          >
-            <Text style={{ color: '#a78bfa', fontSize: 10, fontWeight: '600' }}>
-              {message.model}
-            </Text>
-          </View>
-        )}
-        <Text style={{ color: '#64748b', fontSize: 10 }}>
-          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
-      </View>
-    </View>
+    </AnimateEntrance>
   );
 }
 
@@ -81,13 +89,19 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 function EmptyChat() {
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-      <Text style={{ fontSize: 48, marginBottom: 16 }}>💬</Text>
-      <Text style={{ color: '#e2e8f0', fontSize: 20, fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
-        Talk to AgentOS
-      </Text>
-      <Text style={{ color: '#64748b', fontSize: 14, textAlign: 'center', lineHeight: 20 }}>
-        Your message is routed to the best AI model automatically. Try asking it to write code, research a topic, or plan a project.
-      </Text>
+      <AnimateEntrance delay={200} initialScale={0.5}>
+        <Text style={{ fontSize: 64, marginBottom: 24 }}>💬</Text>
+      </AnimateEntrance>
+      <AnimateEntrance delay={400}>
+        <Text style={{ color: '#e2e8f0', fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' }}>
+          AgentOS Intelligence
+        </Text>
+      </AnimateEntrance>
+      <AnimateEntrance delay={600}>
+        <Text style={{ color: '#64748b', fontSize: 15, textAlign: 'center', lineHeight: 22 }}>
+          Your message is routed to the best AI model automatically. Try asking it to write code, research a topic, or plan a project.
+        </Text>
+      </AnimateEntrance>
     </View>
   );
 }
@@ -129,6 +143,11 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={90}
     >
+      <GlassHeader 
+        title="Intelligence" 
+        subtitle={isLoading ? 'Agent is thinking...' : 'Model: Llama 3.2'} 
+      />
+
       {messages.length === 0 ? (
         <EmptyChat />
       ) : (
@@ -137,8 +156,8 @@ export default function ChatScreen() {
           data={messages}
           renderItem={renderMessage}
           keyExtractor={keyExtractor}
-          contentContainerStyle={{ paddingVertical: 12 }}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          contentContainerStyle={{ paddingVertical: 110 }} // Account for glass header
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -182,21 +201,44 @@ export default function ChatScreen() {
         <Pressable
           onPress={handleSend}
           disabled={isLoading || !input.trim()}
-          style={({ pressed }) => ({
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: input.trim() ? '#7c3aed' : '#2a2a3a',
-            justifyContent: 'center',
-            alignItems: 'center',
-            opacity: pressed ? 0.7 : 1,
-          })}
         >
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#e2e8f0" />
-          ) : (
-            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700', marginTop: -2 }}>↑</Text>
-          )}
+          <MotiView
+            animate={{
+              scale: input.trim() ? 1 : 0.9,
+              backgroundColor: input.trim() ? '#7c3aed' : '#2a2a3a',
+            }}
+            transition={{ type: 'spring', damping: 15 }}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <AnimatePresence exitBeforeEnter>
+              {isLoading ? (
+                <MotiView
+                  key="loading"
+                  from={{ opacity: 0, rotate: '0deg' }}
+                  animate={{ opacity: 1, rotate: '360deg' }}
+                  exit={{ opacity: 0 }}
+                  transition={{ loop: true, type: 'timing', duration: 1000 }}
+                >
+                  <ActivityIndicator size="small" color="#e2e8f0" />
+                </MotiView>
+              ) : (
+                <MotiView
+                  key="send"
+                  from={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700', marginTop: -2 }}>↑</Text>
+                </MotiView>
+              )}
+            </AnimatePresence>
+          </MotiView>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
