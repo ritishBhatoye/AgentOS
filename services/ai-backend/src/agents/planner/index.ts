@@ -41,6 +41,8 @@ Valid task types: coding, research, execution, architecture, review, debug.
 Rules:
 - Order tasks by dependency.
 - Each task should be focused and doable by a specialized agent.
+- STRICTLY use ONLY the valid task types. Do not invent new types like "utility" or "integration".
+- DO NOT invent or embed imaginary tools inside your subtasks. Just write a clear "prompt" string explaining what the worker agent should do.
 - If the request is simple enough to handle directly, still format it as a single task.`;
 
 export class PlannerAgent implements BaseAgent {
