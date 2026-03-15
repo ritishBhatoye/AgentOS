@@ -9,6 +9,7 @@ import { chat, chatStream } from '../../lib/ollama.js';
 import { selectModel } from '../../router/selectModel.js';
 import { SystemLogger } from '../../utils/logger.js';
 import { conversationStore } from '../../memory/conversationStore.js';
+import { agentOrchestrator } from '../../agents/orchestrator.js';
 
 const logger = new SystemLogger('ChatAPI');
 export const chatRouter = Router();
@@ -17,7 +18,7 @@ export const chatRouter = Router();
 
 const chatRequestSchema = z.object({
   message: z.string().min(1, 'Message is required'),
-  conversationId: z.string().uuid().optional(),
+  conversationId: z.string().uuid().nullable().optional().or(z.literal('')),
   model: z.string().optional(),
   stream: z.boolean().optional().default(false),
 });
@@ -38,10 +39,10 @@ chatRouter.post('/', async (req: Request, res: Response, next: NextFunction) => 
     const { message, conversationId: existingConvId, model: preferredModel } = parsed.data;
 
     // Get or create conversation
-    const conversationId = existingConvId || uuid();
+    const conversationId = (existingConvId && existingConvId !== '') ? existingConvId : uuid();
     const conversation = conversationStore.getOrCreate(conversationId);
 
-    // Route to best model
+    // Route to best model and classify task
     const routing = selectModel(message, preferredModel as any);
 
     // Add user message to conversation
@@ -53,39 +54,75 @@ chatRouter.post('/', async (req: Request, res: Response, next: NextFunction) => 
     };
     conversation.messages.push(userMessage);
 
-    // Build messages array for Ollama
-    const ollamaMessages = conversation.messages.map(m => ({
-      role: m.role,
-      content: m.content,
-    }));
-
-    // Add system prompt
-    ollamaMessages.unshift({
-      role: 'system',
-      content: 'You are AgentOS, an intelligent AI assistant. Be helpful, accurate, and concise.',
-    });
-
     const startTime = Date.now();
+    let assistantMessage;
 
-    // Call Ollama
-    const result = await chat({
-      model: routing.model,
-      messages: ollamaMessages,
-    });
+    // ─── DECISION: Simple Chat vs. Autonomous Task ──────────
+    // If it's a task (coding, planning, etc.), trigger the orchestrator
+    if (routing.taskType !== 'conversation') {
+      logger.info(`Routing task to Orchestrator [${routing.taskType}]`, { conversationId });
+      
+      const taskId = uuid();
+      const result = await agentOrchestrator.execute({
+        id: taskId,
+        prompt: message,
+        model: routing.model,
+      });
+
+      assistantMessage = {
+        id: uuid(),
+        role: 'assistant' as const,
+        content: result.finalOutput,
+        model: routing.model,
+        taskId: result.taskId,
+        taskStatus: result.status,
+        timestamp: new Date().toISOString(),
+      };
+    } else {
+      // Simple conversation - direct chat
+      logger.info('Routing simple conversation to direct chat', { conversationId });
+      
+      // Map strictly to Ollama accepted roles
+      const ollamaMessages = conversation.messages
+        .filter(m => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
+        .map(m => ({
+          role: m.role as 'user' | 'assistant' | 'system',
+          content: m.content,
+        }));
+
+      ollamaMessages.unshift({
+        role: 'system',
+        content: 'You are AgentOS, an intelligent AI assistant. Be helpful, accurate, and concise.',
+      });
+
+      const result = await chat({
+        model: routing.model,
+        messages: ollamaMessages,
+      });
+
+      assistantMessage = {
+        id: uuid(),
+        role: 'assistant' as const,
+        content: result.content,
+        model: routing.model,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    // If it's the first message, update the title
+    if (conversation.messages.length === 1 && conversation.title === 'New Conversation') {
+      const titleCandidate = message.substring(0, 30) + (message.length > 30 ? '...' : '');
+      conversation.title = titleCandidate;
+    }
+    conversation.updatedAt = new Date().toISOString();
 
     // Add assistant message to conversation
-    const assistantMessage = {
-      id: uuid(),
-      role: 'assistant' as const,
-      content: result.content,
-      model: routing.model,
-      timestamp: new Date().toISOString(),
-    };
     conversation.messages.push(assistantMessage);
+    conversation.updatedAt = new Date().toISOString();
 
     const duration = Date.now() - startTime;
 
-    logger.info('Chat completed', {
+    logger.info('Chat processing completed', {
       conversationId,
       model: routing.model,
       taskType: routing.taskType,
@@ -169,7 +206,7 @@ chatRouter.get('/conversations', (_req: Request, res: Response) => {
 // ─── GET /api/chat/conversations/:id ──────────────────────
 
 chatRouter.get('/conversations/:id', (req: Request, res: Response) => {
-  const conversation = conversationStore.get(req.params.id);
+  const conversation = conversationStore.get(req.params.id as string);
   if (!conversation) {
     res.status(404).json({ success: false, error: { message: 'Conversation not found' } });
     return;

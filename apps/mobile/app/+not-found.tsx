@@ -1,40 +1,23 @@
-import { Link, Stack } from 'expo-router';
-import { StyleSheet } from 'react-native';
+// ============================================================
+// AgentOS Mobile — Not Found Screen
+// ============================================================
 
-import { Text, View } from '@/components/Themed';
+import { Link, Stack } from 'expo-router';
+import { View, Text } from 'react-native';
 
 export default function NotFoundScreen() {
   return (
     <>
       <Stack.Screen options={{ title: 'Oops!' }} />
-      <View style={styles.container}>
-        <Text style={styles.title}>This screen doesn't exist.</Text>
-
-        <Link href="/" style={styles.link}>
-          <Text style={styles.linkText}>Go to home screen!</Text>
+      <View style={{ flex: 1, backgroundColor: '#0f0f14', justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+        <Text style={{ fontSize: 48, marginBottom: 16 }}>🤖</Text>
+        <Text style={{ color: '#e2e8f0', fontSize: 20, fontWeight: '700', marginBottom: 12 }}>
+          Screen Not Found
+        </Text>
+        <Link href="/(tabs)/chat" style={{ color: '#7c3aed', fontSize: 15, fontWeight: '600' }}>
+          Go to Chat →
         </Link>
       </View>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  link: {
-    marginTop: 15,
-    paddingVertical: 15,
-  },
-  linkText: {
-    fontSize: 14,
-    color: '#2e78b7',
-  },
-});
