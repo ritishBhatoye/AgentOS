@@ -1,39 +1,34 @@
 // ============================================================
-// AgentOS — Planner Agent
-// Decomposes user prompts into actionable subtasks
+// AgentOS — Planner Agent (v2 — with Reasoning Engine)
+// Decomposes prompts into actionable subtasks
 // ============================================================
 
 import { BaseAgent, AgentInfo, AgentExecutionContext, AgentExecutionOutput } from '../baseAgent.js';
-import { chat } from '../../lib/ollama.js';
+import { runReasoningLoop } from '../reasoningEngine.js';
 import { selectModel } from '../../router/selectModel.js';
+import { eventBus } from '../../events/eventBus.js';
 import { SystemLogger } from '../../utils/logger.js';
 
 const logger = new SystemLogger('PlannerAgent');
 
-const PLANNER_SYSTEM_PROMPT = `You are a task planning AI agent. Your job is to analyze user requests and break them down into clear, actionable subtasks.
+const SYSTEM_PROMPT = `You are the Planner Agent for AgentOS. Your job is to analyze user requests and decompose them into clear, actionable subtasks.
 
-You have access to the following TOOLS:
-- web_search: Search the web for information
-- code_executor: Run code in a sandbox
-- file_system: Read/write local files
+For each request, output a structured plan in this format:
 
-For each request, output a structured plan in the following format:
-
-STRATEGY: [Brief description of the overall approach]
+STRATEGY: [Brief description of your approach]
 
 TASKS:
-1. [CODING] Task description here (TOOLS: [list tools needed])
-2. [RESEARCH] Task description here (TOOLS: web_search)
-3. [EXECUTION] Task description here (TOOLS: file_system, code_executor)
+1. [CODING] Task description
+2. [RESEARCH] Task description
+3. [EXECUTION] Task description
 
 Valid task types: CODING, RESEARCH, EXECUTION, ANALYSIS
 
 Rules:
 - Keep tasks specific and actionable
-- Order tasks by dependency
-- Each task should be completable by a single agent
-- Explicitly mention tools required for each task
-- Be concise but thorough`;
+- Order by dependency
+- Each task should be doable by a single specialized agent
+- If the request is simple enough to handle directly, just answer it without creating subtasks`;
 
 export class PlannerAgent implements BaseAgent {
   info: AgentInfo = {
@@ -49,35 +44,35 @@ export class PlannerAgent implements BaseAgent {
     this.info.status = 'busy';
     this.info.currentTaskId = context.taskId;
 
+    eventBus.emit('agent:status', { agentId: 'planner', status: 'busy', taskId: context.taskId });
+
     try {
       const routing = selectModel(context.prompt, context.model as any);
 
-      logger.info('Planning task', { taskId: context.taskId });
-
-      const result = await chat({
+      const result = await runReasoningLoop({
+        taskId: context.taskId,
+        agentId: 'planner',
         model: routing.model,
-        messages: [
-          { role: 'system', content: PLANNER_SYSTEM_PROMPT },
-          { role: 'user', content: context.prompt },
-        ],
+        systemPrompt: SYSTEM_PROMPT,
+        userPrompt: context.prompt,
       });
 
-      // Parse subtasks from the output
-      const subtasks = this.parseSubtasks(result.content);
+      const subtasks = this.parseSubtasks(result.finalAnswer);
 
       this.info.status = 'idle';
       this.info.currentTaskId = undefined;
+      eventBus.emit('agent:status', { agentId: 'planner', status: 'idle' });
 
       return {
-        success: true,
-        output: result.content,
+        success: result.success,
+        output: result.finalAnswer,
         subtasks,
-        modelUsed: routing.model,
+        modelUsed: result.modelUsed,
         duration: Date.now() - startTime,
       };
     } catch (error) {
       this.info.status = 'error';
-      logger.error('Planner execution failed', { error: String(error) });
+      eventBus.emit('agent:status', { agentId: 'planner', status: 'error' });
       return {
         success: false,
         output: `Planning failed: ${String(error)}`,
@@ -92,13 +87,12 @@ export class PlannerAgent implements BaseAgent {
     const lines = output.split('\n');
 
     for (const line of lines) {
-      const match = line.match(/^\d+\.\s*\[(CODING|RESEARCH|EXECUTION|ANALYSIS)\]\s*([^(]+)(?:\(TOOLS:\s*([^)]+)\))?/i);
+      const match = line.match(/^\d+\.\s*\[(CODING|RESEARCH|EXECUTION|ANALYSIS)\]\s*(.+)/i);
       if (match) {
-        const tools = match[3] ? match[3].split(',').map(t => t.trim().toLowerCase()) : [];
         subtasks.push({
           type: match[1].toLowerCase(),
           prompt: match[2].trim(),
-          tools
+          tools: [],
         });
       }
     }

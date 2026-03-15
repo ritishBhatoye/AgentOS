@@ -1,16 +1,17 @@
 // ============================================================
-// AgentOS — Agent Orchestrator
-// Coordinates agent execution and task routing
+// AgentOS — Agent Orchestrator (v2 — with SSE + Tools)
+// Coordinates agent execution, task routing, and event streaming
 // ============================================================
 
 import { v4 as uuid } from 'uuid';
-import { BaseAgent, AgentInfo, AgentExecutionOutput } from './baseAgent.js';
+import { BaseAgent, AgentInfo } from './baseAgent.js';
 import { PlannerAgent } from './planner/index.js';
 import { CodingAgent } from './coding/index.js';
 import { ResearchAgent } from './research/index.js';
 import { ExecutionAgent } from './execution/index.js';
 import { taskQueue, QueuedTask } from './taskQueue.js';
 import { classifyTask } from '../router/selectModel.js';
+import { eventBus } from '../events/eventBus.js';
 import { SystemLogger } from '../utils/logger.js';
 
 const logger = new SystemLogger('Orchestrator');
@@ -35,7 +36,6 @@ class AgentOrchestrator {
   private agents: Map<string, BaseAgent> = new Map();
 
   constructor() {
-    // Register all agents
     this.agents.set('planner', new PlannerAgent());
     this.agents.set('coding', new CodingAgent());
     this.agents.set('research', new ResearchAgent());
@@ -46,37 +46,28 @@ class AgentOrchestrator {
     });
   }
 
-  /**
-   * Execute a user request through the agent pipeline
-   */
   async execute(request: ExecuteRequest): Promise<OrchestratorResult> {
     const startTime = Date.now();
     const { id: taskId, prompt, agentId, model } = request;
 
     logger.info('Orchestrator executing', { taskId, agentId, prompt: prompt.substring(0, 100) });
 
-    // If a specific agent is requested, route directly to it
     if (agentId && this.agents.has(agentId)) {
       return this.executeSingleAgent(taskId, prompt, agentId, startTime, model);
     }
 
-    // Otherwise, use the planner to decompose and orchestrate
     return this.executeWithPlanner(taskId, prompt, startTime, model);
   }
 
-  /**
-   * Execute with a specific agent directly
-   */
   private async executeSingleAgent(
     taskId: string,
     prompt: string,
     agentId: string,
     startTime: number,
-    model?: string
+    model?: string,
   ): Promise<OrchestratorResult> {
     const agent = this.agents.get(agentId)!;
 
-    // Create task in queue
     const task: QueuedTask = {
       id: taskId,
       type: classifyTask(prompt).taskType,
@@ -90,35 +81,30 @@ class AgentOrchestrator {
       updatedAt: new Date().toISOString(),
     };
     taskQueue.add(task);
+    eventBus.emit('task:created', { taskId, type: task.type, agentId });
 
-    // Execute
     const result = await agent.execute({ taskId, prompt, model });
 
-    // Update task
-    taskQueue.updateStatus(
-      taskId,
-      result.success ? 'completed' : 'failed',
-      result.output,
-      result.success ? undefined : result.output
-    );
+    const finalStatus = result.success ? 'completed' : 'failed';
+    taskQueue.updateStatus(taskId, finalStatus, result.output, result.success ? undefined : result.output);
+    eventBus.emit(result.success ? 'task:completed' : 'task:failed', {
+      taskId, agentId, duration: Date.now() - startTime,
+    });
 
     return {
       taskId,
-      status: result.success ? 'completed' : 'failed',
+      status: finalStatus,
       tasks: [taskQueue.getTask(taskId)!],
       finalOutput: result.output,
       totalDuration: Date.now() - startTime,
     };
   }
 
-  /**
-   * Execute using the planner for task decomposition
-   */
   private async executeWithPlanner(
     taskId: string,
     prompt: string,
     startTime: number,
-    model?: string
+    model?: string,
   ): Promise<OrchestratorResult> {
     const planner = this.agents.get('planner')!;
 
@@ -136,6 +122,7 @@ class AgentOrchestrator {
       updatedAt: new Date().toISOString(),
     };
     taskQueue.add(parentTask);
+    eventBus.emit('task:created', { taskId, type: 'planning', agentId: 'planner' });
 
     // Step 1: Plan
     logger.info('Step 1: Planning task decomposition');
@@ -143,6 +130,7 @@ class AgentOrchestrator {
 
     if (!planResult.success) {
       taskQueue.updateStatus(taskId, 'failed', undefined, planResult.output);
+      eventBus.emit('task:failed', { taskId, error: planResult.output });
       return {
         taskId,
         status: 'failed',
@@ -162,48 +150,45 @@ class AgentOrchestrator {
 
       for (const subtask of planResult.subtasks) {
         const subtaskId = uuid();
-        const agentId = this.mapTypeToAgent(subtask.type);
+        const workerAgentId = this.mapTypeToAgent(subtask.type);
 
         const subTask: QueuedTask = {
           id: subtaskId,
           type: subtask.type as any,
           prompt: subtask.prompt,
-          assignedTo: agentId,
+          assignedTo: workerAgentId,
           status: 'running',
           priority: 'medium',
           parentTaskId: taskId,
           subtaskIds: [],
-          metadata: {
-            tools: subtask.tools
-          },
+          metadata: { tools: subtask.tools },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
         taskQueue.add(subTask);
         parentTask.subtaskIds.push(subtaskId);
+        eventBus.emit('task:created', { taskId: subtaskId, type: subtask.type, agentId: workerAgentId, parentTaskId: taskId });
 
-        // Execute subtask
-        const agent = this.agents.get(agentId);
+        const agent = this.agents.get(workerAgentId);
         if (agent) {
           const result = await agent.execute({ taskId: subtaskId, prompt: subtask.prompt });
-          taskQueue.updateStatus(
-            subtaskId,
-            result.success ? 'completed' : 'failed',
-            result.output
-          );
+          const status = result.success ? 'completed' : 'failed';
+          taskQueue.updateStatus(subtaskId, status, result.output);
+          eventBus.emit(result.success ? 'task:completed' : 'task:failed', {
+            taskId: subtaskId, agentId: workerAgentId,
+          });
           subtaskResults.push(`[${subtask.type.toUpperCase()}] ${result.output}`);
         }
 
         allTasks.push(taskQueue.getTask(subtaskId)!);
       }
     } else {
-      // No subtasks parsed — use the plan output directly
       subtaskResults.push(planResult.output);
     }
 
-    // Mark parent task as completed
     const finalOutput = subtaskResults.join('\n\n---\n\n');
     taskQueue.updateStatus(taskId, 'completed', finalOutput);
+    eventBus.emit('task:completed', { taskId, subtaskCount: planResult.subtasks?.length || 0 });
 
     return {
       taskId,
@@ -215,9 +200,6 @@ class AgentOrchestrator {
     };
   }
 
-  /**
-   * Map a task type to the appropriate agent
-   */
   private mapTypeToAgent(type: string): string {
     const mapping: Record<string, string> = {
       coding: 'coding',
@@ -229,9 +211,6 @@ class AgentOrchestrator {
     return mapping[type.toLowerCase()] || 'research';
   }
 
-  /**
-   * Get all agent statuses
-   */
   getAgentStatuses(): Record<string, AgentInfo> {
     const statuses: Record<string, AgentInfo> = {};
     for (const [id, agent] of this.agents) {
@@ -240,14 +219,10 @@ class AgentOrchestrator {
     return statuses;
   }
 
-  /**
-   * Get a specific agent's info
-   */
   getAgent(id: string): AgentInfo | undefined {
     const agent = this.agents.get(id);
     return agent ? { ...agent.info } : undefined;
   }
 }
 
-// Singleton instance
 export const agentOrchestrator = new AgentOrchestrator();

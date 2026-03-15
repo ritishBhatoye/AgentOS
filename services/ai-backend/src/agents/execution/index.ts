@@ -1,65 +1,71 @@
 // ============================================================
-// AgentOS — Execution Agent
-// Handles command execution, file operations, and automation
+// AgentOS — Execution Agent (v2 — with Tool Access)
+// Command execution, file operations, automation
 // ============================================================
 
 import { BaseAgent, AgentInfo, AgentExecutionContext, AgentExecutionOutput } from '../baseAgent.js';
-import { chat } from '../../lib/ollama.js';
+import { runReasoningLoop } from '../reasoningEngine.js';
 import { selectModel } from '../../router/selectModel.js';
+import { eventBus } from '../../events/eventBus.js';
 import { SystemLogger } from '../../utils/logger.js';
 
 const logger = new SystemLogger('ExecutionAgent');
 
-const EXECUTION_SYSTEM_PROMPT = `You are an execution AI agent. Your job is to plan and describe how to execute tasks, run commands, and perform operations.
+const SYSTEM_PROMPT = `You are the Execution Agent for AgentOS. You handle file operations, code execution, and system tasks.
+
+Your capabilities:
+- Read and write files using the file_system tool
+- Execute code using the code_executor tool
+- Create project structures
+- Validate and test code
 
 Guidelines:
-- Describe step-by-step execution plans
-- Include exact commands when applicable
-- Consider error handling and rollback
-- Verify prerequisites before execution
-- Report expected outputs
-
-For now, describe the execution plan. Tool integration for actual execution will be added in Phase 4.`;
+- Use file_system tool with action "read" to examine existing files
+- Use file_system tool with action "write" to create/modify files
+- Use file_system tool with action "list" to explore directories
+- Use code_executor to test JavaScript code
+- Always verify results after writing files
+- Report what you did step by step`;
 
 export class ExecutionAgent implements BaseAgent {
   info: AgentInfo = {
     id: 'execution',
     name: 'Execution Agent',
-    description: 'Plans and executes tasks including command execution and file operations',
+    description: 'Executes tasks including file operations, code execution, and project automation',
     status: 'idle',
-    capabilities: ['command_execution', 'file_operations', 'automation', 'deployment'],
+    capabilities: ['command_execution', 'file_operations', 'automation', 'code_executor', 'file_system'],
   };
 
   async execute(context: AgentExecutionContext): Promise<AgentExecutionOutput> {
     const startTime = Date.now();
     this.info.status = 'busy';
     this.info.currentTaskId = context.taskId;
+    eventBus.emit('agent:status', { agentId: 'execution', status: 'busy', taskId: context.taskId });
 
     try {
       const routing = selectModel(context.prompt, context.model as any);
 
-      logger.info('Execution task started', { taskId: context.taskId });
-
-      const result = await chat({
+      const result = await runReasoningLoop({
+        taskId: context.taskId,
+        agentId: 'execution',
         model: routing.model,
-        messages: [
-          { role: 'system', content: EXECUTION_SYSTEM_PROMPT },
-          { role: 'user', content: context.prompt },
-        ],
+        systemPrompt: SYSTEM_PROMPT,
+        userPrompt: context.prompt,
       });
 
       this.info.status = 'idle';
       this.info.currentTaskId = undefined;
+      eventBus.emit('agent:status', { agentId: 'execution', status: 'idle' });
 
       return {
-        success: true,
-        output: result.content,
-        modelUsed: routing.model,
+        success: result.success,
+        output: result.finalAnswer,
+        modelUsed: result.modelUsed,
         duration: Date.now() - startTime,
       };
     } catch (error) {
       this.info.status = 'error';
-      logger.error('Execution task failed', { error: String(error) });
+      eventBus.emit('agent:status', { agentId: 'execution', status: 'error' });
       return {
         success: false,
         output: `Execution task failed: ${String(error)}`,

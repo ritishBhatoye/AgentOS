@@ -1,0 +1,81 @@
+# ============================================================
+# AgentOS — Docker Compose
+# Full stack: Web + Backend + Ollama
+# ============================================================
+
+version: '3.9'
+
+services:
+  # ─── AI Backend ─────────────────────────────────────────
+  ai-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      - ollama
+    volumes:
+      - backend-workspace:/app/services/ai-backend/workspace
+      - backend-data:/app/services/ai-backend/data
+    restart: unless-stopped
+    networks:
+      - agentos
+
+  # ─── Web Dashboard ─────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - ai-backend
+    restart: unless-stopped
+    networks:
+      - agentos
+
+  # ─── Ollama (Local AI Models) ──────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - agentos
+    deploy:
+      resources:
+        reservations:
+          memory: 4G
+
+  # ─── Chroma Vector DB ─────────────────────────────────
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
+    networks:
+      - agentos
+
+volumes:
+  ollama-models:
+  chroma-data:
+  backend-workspace:
+  backend-data:
+
+networks:
+  agentos:
+    driver: bridge
