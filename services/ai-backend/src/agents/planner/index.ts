@@ -1,39 +1,49 @@
 // ============================================================
-// AgentOS — Planner Agent
-// Decomposes user prompts into actionable subtasks
+// AgentOS — Planner Agent (v2 — with Reasoning Engine)
+// Decomposes prompts into actionable subtasks
 // ============================================================
 
 import { BaseAgent, AgentInfo, AgentExecutionContext, AgentExecutionOutput } from '../baseAgent.js';
-import { chat } from '../../lib/ollama.js';
+import { runReasoningLoop } from '../reasoningEngine.js';
 import { selectModel } from '../../router/selectModel.js';
+import { eventBus } from '../../events/eventBus.js';
 import { SystemLogger } from '../../utils/logger.js';
 
 const logger = new SystemLogger('PlannerAgent');
 
-const PLANNER_SYSTEM_PROMPT = `You are a task planning AI agent. Your job is to analyze user requests and break them down into clear, actionable subtasks.
+const SYSTEM_PROMPT = `You are the Planner Agent for AgentOS. Your job is to analyze user requests and decompose them into a structured execution plan.
 
-You have access to the following TOOLS:
-- web_search: Search the web for information
-- code_executor: Run code in a sandbox
-- file_system: Read/write local files
+You MUST output your plan as a valid JSON object followed by your reasoning.
 
-For each request, output a structured plan in the following format:
+FORMAT:
+\`\`\`json
+{
+  "strategy": "Brief description of your approach",
+  "tasks": [
+    {
+      "type": "coding",
+      "prompt": "Description of the coding task"
+    },
+    {
+      "type": "research",
+      "prompt": "Description of the research task"
+    },
+    {
+      "type": "execution",
+      "prompt": "Description of the execution/testing task"
+    }
+  ]
+}
+\`\`\`
 
-STRATEGY: [Brief description of the overall approach]
-
-TASKS:
-1. [CODING] Task description here (TOOLS: [list tools needed])
-2. [RESEARCH] Task description here (TOOLS: web_search)
-3. [EXECUTION] Task description here (TOOLS: file_system, code_executor)
-
-Valid task types: CODING, RESEARCH, EXECUTION, ANALYSIS
+Valid task types: coding, research, execution, architecture, review, debug.
 
 Rules:
-- Keep tasks specific and actionable
-- Order tasks by dependency
-- Each task should be completable by a single agent
-- Explicitly mention tools required for each task
-- Be concise but thorough`;
+- Order tasks by dependency.
+- Each task should be focused and doable by a specialized agent.
+- STRICTLY use ONLY the valid task types. Do not invent new types like "utility" or "integration".
+- DO NOT invent or embed imaginary tools inside your subtasks. Just write a clear "prompt" string explaining what the worker agent should do.
+- If the request is simple enough to handle directly, still format it as a single task.`;
 
 export class PlannerAgent implements BaseAgent {
   info: AgentInfo = {
@@ -49,35 +59,35 @@ export class PlannerAgent implements BaseAgent {
     this.info.status = 'busy';
     this.info.currentTaskId = context.taskId;
 
+    eventBus.emit('agent:status', { agentId: 'planner', status: 'busy', taskId: context.taskId });
+
     try {
       const routing = selectModel(context.prompt, context.model as any);
 
-      logger.info('Planning task', { taskId: context.taskId });
-
-      const result = await chat({
+      const result = await runReasoningLoop({
+        taskId: context.taskId,
+        agentId: 'planner',
         model: routing.model,
-        messages: [
-          { role: 'system', content: PLANNER_SYSTEM_PROMPT },
-          { role: 'user', content: context.prompt },
-        ],
+        systemPrompt: SYSTEM_PROMPT,
+        userPrompt: context.prompt,
       });
 
-      // Parse subtasks from the output
-      const subtasks = this.parseSubtasks(result.content);
+      const subtasks = this.parseSubtasks(result.finalAnswer);
 
       this.info.status = 'idle';
       this.info.currentTaskId = undefined;
+      eventBus.emit('agent:status', { agentId: 'planner', status: 'idle' });
 
       return {
-        success: true,
-        output: result.content,
+        success: result.success,
+        output: result.finalAnswer,
         subtasks,
-        modelUsed: routing.model,
+        modelUsed: result.modelUsed,
         duration: Date.now() - startTime,
       };
     } catch (error) {
       this.info.status = 'error';
-      logger.error('Planner execution failed', { error: String(error) });
+      eventBus.emit('agent:status', { agentId: 'planner', status: 'error' });
       return {
         success: false,
         output: `Planning failed: ${String(error)}`,
@@ -88,17 +98,34 @@ export class PlannerAgent implements BaseAgent {
   }
 
   private parseSubtasks(output: string): Array<{ type: string; prompt: string; tools: string[] }> {
+    try {
+      // Try to find a JSON block in the output
+      const jsonMatch = output.match(/\{[\s\S]*"tasks"[\s\S]*\}/);
+      if (jsonMatch) {
+        const data = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(data.tasks)) {
+          return data.tasks.map((t: any) => ({
+            type: t.type || 'research',
+            prompt: t.prompt || String(t),
+            tools: t.tools || [],
+          }));
+        }
+      }
+    } catch (e) {
+      logger.warn('Failed to parse JSON subtasks, falling back to line parsing', { error: e });
+    }
+
+    // Fallback: simple line parsing if JSON fails
     const subtasks: Array<{ type: string; prompt: string; tools: string[] }> = [];
     const lines = output.split('\n');
 
     for (const line of lines) {
-      const match = line.match(/^\d+\.\s*\[(CODING|RESEARCH|EXECUTION|ANALYSIS)\]\s*([^(]+)(?:\(TOOLS:\s*([^)]+)\))?/i);
+      const match = line.match(/^\d+\.\s*\[?(CODING|RESEARCH|EXECUTION|ANALYSIS|ARCHITECTURE|DEBUG)\]?\s*[:\-\s]*(.+)/i);
       if (match) {
-        const tools = match[3] ? match[3].split(',').map(t => t.trim().toLowerCase()) : [];
         subtasks.push({
           type: match[1].toLowerCase(),
           prompt: match[2].trim(),
-          tools
+          tools: [],
         });
       }
     }

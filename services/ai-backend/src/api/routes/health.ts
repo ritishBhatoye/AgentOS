@@ -7,6 +7,9 @@ import { checkConnection, listModels } from '../../lib/ollama.js';
 import { agentOrchestrator } from '../../agents/orchestrator.js';
 import { taskQueue } from '../../agents/taskQueue.js';
 import { conversationStore } from '../../memory/conversationStore.js';
+import { memorySystem } from '../../memory/index.js';
+import { eventBus } from '../../events/eventBus.js';
+import { toolRegistry } from '../../tools/index.js';
 import { SystemLogger } from '../../utils/logger.js';
 
 const startTime = Date.now();
@@ -20,6 +23,7 @@ healthRouter.get('/', async (_req: Request, res: Response) => {
   const agentStatuses = agentOrchestrator.getAgentStatuses();
   const taskStats = taskQueue.getStats();
   const convStats = conversationStore.getStats();
+  const memoryStats = memorySystem.getStats();
 
   const isHealthy = ollamaConnected;
 
@@ -37,6 +41,9 @@ healthRouter.get('/', async (_req: Request, res: Response) => {
       agents: agentStatuses,
       tasks: taskStats,
       conversations: convStats,
+      memory: memoryStats,
+      tools: toolRegistry.listNames(),
+      sseClients: eventBus.getClientCount(),
       timestamp: new Date().toISOString(),
     },
   });
@@ -49,8 +56,5 @@ healthRouter.get('/logs', (req: Request, res: Response) => {
   const level = req.query.level as string | undefined;
   const logs = SystemLogger.getLogs(limit, level as any);
 
-  res.json({
-    success: true,
-    data: logs,
-  });
+  res.json({ success: true, data: logs });
 });

@@ -11,6 +11,15 @@ interface HealthData {
   agents: Record<string, { id: string; name: string; status: string; description: string; capabilities: string[] }>;
   tasks: { total: number; pending: number; running: number; completed: number; failed: number };
   conversations: { total: number; totalMessages: number };
+  memory?: { shortTerm: any; longTerm: { total: number; byType: Record<string, number> } };
+  tools?: string[];
+  sseClients?: number;
+}
+
+interface SSEEvent {
+  type: string;
+  data: Record<string, unknown>;
+  timestamp: string;
 }
 
 interface ConversationMessage {
@@ -25,7 +34,7 @@ interface ConversationMessage {
 const API_BASE = "http://localhost:4000/api";
 
 // ─── Navigation ────────────────────────────────────────────
-type Page = "dashboard" | "chat" | "agents" | "tasks" | "models" | "logs";
+type Page = "dashboard" | "chat" | "agents" | "tasks" | "models" | "events" | "memory" | "logs";
 
 const NAV_ITEMS: Array<{ id: Page; icon: string; label: string }> = [
   { id: "dashboard", icon: "📊", label: "Dashboard" },
@@ -33,6 +42,8 @@ const NAV_ITEMS: Array<{ id: Page; icon: string; label: string }> = [
   { id: "agents", icon: "🤖", label: "Agents" },
   { id: "tasks", icon: "📋", label: "Tasks" },
   { id: "models", icon: "🧠", label: "Models" },
+  { id: "events", icon: "⚡", label: "Live Events" },
+  { id: "memory", icon: "🧬", label: "Memory" },
   { id: "logs", icon: "📝", label: "Logs" },
 ];
 
@@ -41,6 +52,26 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
   const [health, setHealth] = useState<HealthData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sseEvents, setSseEvents] = useState<SSEEvent[]>([]);
+
+  // SSE Connection
+  useEffect(() => {
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`${API_BASE}/events`);
+      const eventTypes = ['agent:status', 'agent:thought', 'agent:tool_call', 'agent:tool_result', 'agent:output', 'task:created', 'task:completed', 'task:failed', 'system:log', 'memory:stored'];
+      eventTypes.forEach(type => {
+        es!.addEventListener(type, (e: MessageEvent) => {
+          try {
+            const event = JSON.parse(e.data) as SSEEvent;
+            setSseEvents(prev => [...prev.slice(-200), event]);
+          } catch {}
+        });
+      });
+      es.onerror = () => { /* reconnect handled by browser */ };
+    } catch {}
+    return () => { es?.close(); };
+  }, []);
 
   const fetchHealth = useCallback(async () => {
     try {
@@ -124,7 +155,7 @@ export default function Dashboard() {
           <div className="header-actions">
             <div className="header-status">
               <span className={`status-dot ${health ? "online" : "offline"}`} />
-              {health?.status === "healthy" ? "System Healthy" : "System Offline"}
+              {health?.status === "healthy" ? "System Healthy" : health ? "Degraded (no Ollama)" : "System Offline"}
             </div>
           </div>
         </header>
@@ -135,6 +166,8 @@ export default function Dashboard() {
           {currentPage === "agents" && <AgentsPage health={health} />}
           {currentPage === "tasks" && <TasksPage />}
           {currentPage === "models" && <ModelsPage health={health} />}
+          {currentPage === "events" && <EventsPage events={sseEvents} />}
+          {currentPage === "memory" && <MemoryPage />}
           {currentPage === "logs" && <LogsPage />}
         </div>
       </main>
@@ -303,10 +336,36 @@ function DashboardPage({ health, isLoading }: { health: HealthData | null; isLoa
 
 // ─── Chat Page ─────────────────────────────────────────────
 function ChatPage() {
+  const [conversations, setConversations] = useState<any[]>([]);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+
+  const fetchConversations = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/chat/conversations`);
+      const data = await res.json();
+      if (data.success) {
+        setConversations(data.data);
+      }
+    } catch {}
+  }, []);
+
+  const selectConversation = async (id: string) => {
+    setConversationId(id);
+    try {
+      const res = await fetch(`${API_BASE}/chat/conversations/${id}`);
+      const data = await res.json();
+      if (data.success) {
+        setMessages(data.data.messages);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchConversations();
+  }, [fetchConversations]);
 
   const sendMessage = async () => {
     if (!input.trim() || isStreaming) return;
@@ -336,6 +395,7 @@ function ChatPage() {
       if (data.success) {
         setConversationId(data.data.conversationId);
         setMessages((prev) => [...prev, data.data.message]);
+        fetchConversations(); // Refresh list
       }
     } catch (err) {
       setMessages((prev) => [
@@ -360,54 +420,94 @@ function ChatPage() {
   };
 
   return (
-    <div className="chat-container">
-      <div className="chat-messages">
-        {messages.length === 0 && (
-          <div className="empty-state">
-            <div className="empty-state-icon">💬</div>
-            <p className="empty-state-text">Start a conversation with AgentOS</p>
-            <p className="empty-state-subtext">Your messages are routed to the best AI model automatically</p>
-          </div>
-        )}
-        {messages.map((msg) => (
-          <div key={msg.id} className={`chat-message ${msg.role}`}>
-            {msg.content}
-            {msg.model && (
-              <div className="chat-message-meta">
-                via {msg.model}
+    <div className="grid-chat" style={{ display: "grid", gridTemplateColumns: "260px 1fr", height: "calc(100vh - 160px)", gap: 20 }}>
+      {/* Search/History Sidebar */}
+      <div className="card" style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "16px", borderBottom: "1px solid var(--border)", fontWeight: 700 }}>History</div>
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {conversations.length === 0 ? (
+             <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>No history</div>
+          ) : (
+            conversations.map(conv => (
+              <div
+                key={conv.id}
+                onClick={() => selectConversation(conv.id)}
+                style={{
+                  padding: "12px 16px",
+                  cursor: "pointer",
+                  borderBottom: "1px solid var(--border)",
+                  background: conversationId === conv.id ? "var(--bg-tertiary)" : "transparent",
+                  fontSize: 13
+                }}
+              >
+                <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+                  {conv.title || "New Chat"}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  {conv.messageCount} messages · {new Date(conv.updatedAt).toLocaleTimeString()}
+                </div>
               </div>
-            )}
-          </div>
-        ))}
-        {isStreaming && (
-          <div className="chat-message assistant">
-            <div className="loading-dots">
-              <span />
-              <span />
-              <span />
-            </div>
-          </div>
-        )}
+            ))
+          )}
+        </div>
+        <button
+          className="btn"
+          style={{ margin: 12, background: "var(--bg-tertiary)" }}
+          onClick={() => { setConversationId(null); setMessages([]); }}
+        >
+          + New Chat
+        </button>
       </div>
-      <div className="chat-input-container">
-        <div className="chat-input-wrapper">
-          <textarea
-            className="chat-input"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
-            rows={1}
-            disabled={isStreaming}
-          />
-          <button
-            className="btn btn-primary btn-icon"
-            onClick={sendMessage}
-            disabled={isStreaming || !input.trim()}
-            style={{ width: 50, height: 50, fontSize: 20 }}
-          >
-            ↑
-          </button>
+
+      <div className="chat-container">
+        <div className="chat-messages">
+          {messages.length === 0 && (
+            <div className="empty-state">
+              <div className="empty-state-icon">💬</div>
+              <p className="empty-state-text">Start a conversation with AgentOS</p>
+              <p className="empty-state-subtext">Your messages are routed to the best AI model automatically</p>
+            </div>
+          )}
+          {messages.map((msg) => (
+            <div key={msg.id} className={`chat-message ${msg.role}`}>
+              <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+              {msg.model && (
+                <div className="chat-message-meta">
+                  via {msg.model}
+                </div>
+              )}
+            </div>
+          ))}
+          {isStreaming && (
+            <div className="chat-message assistant">
+              <div className="loading-dots">
+                <span />
+                <span />
+                <span />
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="chat-input-container">
+          <div className="chat-input-wrapper">
+            <textarea
+              className="chat-input"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+              rows={1}
+              disabled={isStreaming}
+            />
+            <button
+              className="btn btn-primary btn-icon"
+              onClick={sendMessage}
+              disabled={isStreaming || !input.trim()}
+              style={{ width: 50, height: 50, fontSize: 20 }}
+            >
+              ↑
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -462,24 +562,45 @@ function AgentsPage({ health }: { health: HealthData | null }) {
 function TasksPage() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [taskDetail, setTaskDetail] = useState<any>(null);
+
+  const fetchTasks = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/tasks`);
+      const data = await res.json();
+      if (data.success) {
+        setTasks(data.data.tasks);
+        setStats(data.data.stats);
+      }
+    } catch {
+      // Backend offline
+    }
+  }, []);
+
+  const fetchTaskDetail = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${id}`);
+      const data = await res.json();
+      if (data.success) {
+        setTaskDetail(data.data);
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/tasks`);
-        const data = await res.json();
-        if (data.success) {
-          setTasks(data.data.tasks);
-          setStats(data.data.stats);
-        }
-      } catch {
-        // Backend offline
-      }
-    };
     fetchTasks();
     const interval = setInterval(fetchTasks, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchTasks]);
+
+  useEffect(() => {
+    if (selectedTaskId) {
+      fetchTaskDetail(selectedTaskId);
+    } else {
+      setTaskDetail(null);
+    }
+  }, [selectedTaskId, fetchTaskDetail]);
 
   return (
     <>
@@ -516,55 +637,123 @@ function TasksPage() {
         </div>
       )}
 
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <div className="card-title">📋 Task Queue</div>
-            <div className="card-subtitle">All agent tasks and their status</div>
+      <div className="grid-chat" style={{ display: "grid", gridTemplateColumns: "1fr 400px", gap: 20 }}>
+        <div className="card" style={{ padding: 0 }}>
+          <div className="card-header" style={{ padding: 16 }}>
+            <div>
+              <div className="card-title">📋 Task Queue</div>
+              <div className="card-subtitle">All agent tasks and their status</div>
+            </div>
           </div>
-        </div>
-        {tasks.length > 0 ? (
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Task ID</th>
-                  <th>Type</th>
-                  <th>Agent</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.map((task: any) => (
-                  <tr key={task.id}>
-                    <td style={{ fontFamily: "var(--font-mono)" }}>{task.id.substring(0, 8)}...</td>
-                    <td><span className="badge badge-info">{task.type}</span></td>
-                    <td>{task.assignedTo || "—"}</td>
-                    <td>
-                      <span className={`badge ${
-                        task.status === "completed" ? "badge-success" :
-                        task.status === "running" ? "badge-warning" :
-                        task.status === "failed" ? "badge-danger" : "badge-info"
-                      }`}>
-                        {task.status}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                      {new Date(task.createdAt).toLocaleTimeString()}
-                    </td>
+          {tasks.length > 0 ? (
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Task ID</th>
+                    <th>Type</th>
+                    <th>Agent</th>
+                    <th>Status</th>
+                    <th>Created</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {tasks.map((task: any) => (
+                    <tr
+                      key={task.id}
+                      onClick={() => setSelectedTaskId(task.id)}
+                      style={{ cursor: "pointer", background: selectedTaskId === task.id ? "var(--bg-tertiary)" : "transparent" }}
+                    >
+                      <td style={{ fontFamily: "var(--font-mono)" }}>{task.id.substring(0, 8)}...</td>
+                      <td><span className="badge badge-info">{task.type}</span></td>
+                      <td>{task.assignedTo || "—"}</td>
+                      <td>
+                        <span className={`badge ${
+                          task.status === "completed" ? "badge-success" :
+                          task.status === "running" ? "badge-warning" :
+                          task.status === "failed" ? "badge-danger" : "badge-info"
+                        }`}>
+                          {task.status}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                        {new Date(task.createdAt).toLocaleTimeString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-state-icon">📋</div>
+              <p className="empty-state-text">No tasks yet</p>
+              <p className="empty-state-subtext">Tasks appear when agents process requests</p>
+            </div>
+          )}
+        </div>
+
+        {/* Task Detail Pane */}
+        <div className="card" style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div className="card-header">
+            <div>
+              <div className="card-title">🔍 Task Detail</div>
+              <div className="card-subtitle">{selectedTaskId ? `Inspecting ${selectedTaskId.substring(0, 8)}` : "Select a task to see details"}</div>
+            </div>
           </div>
-        ) : (
-          <div className="empty-state">
-            <div className="empty-state-icon">📋</div>
-            <p className="empty-state-text">No tasks yet</p>
-            <p className="empty-state-subtext">Tasks appear when agents process requests</p>
-          </div>
-        )}
+          {taskDetail ? (
+            <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Prompt</div>
+                <div style={{ fontSize: 14, color: "var(--text-primary)", lineHeight: 1.5 }}>{taskDetail.prompt}</div>
+              </div>
+
+              {taskDetail.subtaskIds?.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Subtasks</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {taskDetail.subtaskIds.map((sid: string) => (
+                      <div key={sid} style={{ padding: 10, background: "var(--bg-tertiary)", borderRadius: 6, fontSize: 12 }}>
+                        🆔 {sid.substring(0, 8)}...
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Results / Output</div>
+                <div style={{
+                  fontSize: 13,
+                  color: "var(--text-secondary)",
+                  background: "var(--bg-primary)",
+                  padding: 12,
+                  borderRadius: 8,
+                  border: "1px solid var(--border)",
+                  whiteSpace: "pre-wrap",
+                  lineHeight: 1.6,
+                  fontFamily: "var(--font-mono)"
+                }}>
+                  {taskDetail.finalOutput || taskDetail.error || "No output yet..."}
+                </div>
+              </div>
+
+              {taskDetail.metadata && Object.keys(taskDetail.metadata).length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Metadata</div>
+                  <pre style={{ fontSize: 11, color: "var(--text-muted)", background: "var(--bg-tertiary)", padding: 8, borderRadius: 4 }}>
+                    {JSON.stringify(taskDetail.metadata, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="empty-state" style={{ height: "100%", justifyContent: "center" }}>
+              <div className="empty-state-icon" style={{ fontSize: 32 }}>📝</div>
+              <p className="empty-state-text">No task selected</p>
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
@@ -691,6 +880,188 @@ function LogsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Events Page (SSE Live Feed) ──────────────────────────
+function EventsPage({ events }: { events: SSEEvent[] }) {
+  const getEventIcon = (type: string) => {
+    if (type.startsWith('agent:thought')) return '💭';
+    if (type.startsWith('agent:tool')) return '🔧';
+    if (type.startsWith('agent:output')) return '📤';
+    if (type.startsWith('agent:status')) return '🤖';
+    if (type.startsWith('task:created')) return '📋';
+    if (type.startsWith('task:completed')) return '✅';
+    if (type.startsWith('task:failed')) return '❌';
+    if (type.startsWith('memory')) return '🧬';
+    return '⚡';
+  };
+
+  const getEventColor = (type: string) => {
+    if (type.includes('completed')) return 'badge-success';
+    if (type.includes('failed')) return 'badge-danger';
+    if (type.includes('tool')) return 'badge-warning';
+    if (type.includes('thought')) return 'badge-info';
+    return 'badge-purple';
+  };
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <div className="card-title">⚡ Live Agent Events</div>
+          <div className="card-subtitle">Real-time SSE stream from the AI backend ({events.length} events)</div>
+        </div>
+      </div>
+      {events.length > 0 ? (
+        <div style={{ maxHeight: "calc(100vh - 260px)", overflowY: "auto" }}>
+          {[...events].reverse().map((event, i) => (
+            <div key={i} className="log-entry">
+              <span className="log-time">
+                {new Date(event.timestamp).toLocaleTimeString()}
+              </span>
+              <span style={{ marginRight: 8 }}>{getEventIcon(event.type)}</span>
+              <span className={`badge ${getEventColor(event.type)}`} style={{ marginRight: 8 }}>
+                {event.type}
+              </span>
+              <span className="log-message" style={{ fontSize: 12 }}>
+                {JSON.stringify(event.data).substring(0, 200)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <div className="empty-state-icon">⚡</div>
+          <p className="empty-state-text">Waiting for events...</p>
+          <p className="empty-state-subtext">Events stream in real-time when agents process requests</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Memory Page ──────────────────────────────────────────
+function MemoryPage() {
+  const [entries, setEntries] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    const fetchMemory = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/memory`);
+        const data = await res.json();
+        if (data.success) {
+          setEntries(data.data.entries);
+          setStats(data.data.stats);
+        }
+      } catch {}
+    };
+    fetchMemory();
+    const interval = setInterval(fetchMemory, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) { setSearchResults(null); return; }
+    try {
+      const res = await fetch(`${API_BASE}/memory/search?q=${encodeURIComponent(searchQuery)}`);
+      const data = await res.json();
+      if (data.success) setSearchResults(data.data);
+    } catch {}
+  };
+
+  const displayEntries = searchResults || entries;
+
+  return (
+    <>
+      {stats && (
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-icon purple">🧬</div>
+            <div className="stat-info">
+              <div className="stat-value">{stats.longTerm?.total || 0}</div>
+              <div className="stat-label">Total Memories</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon cyan">💬</div>
+            <div className="stat-info">
+              <div className="stat-value">{stats.shortTerm?.conversations || 0}</div>
+              <div className="stat-label">Active Conversations</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon blue">📝</div>
+            <div className="stat-info">
+              <div className="stat-value">{stats.shortTerm?.totalTurns || 0}</div>
+              <div className="stat-label">Conversation Turns</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 8, padding: 4 }}>
+          <input
+            style={{
+              flex: 1, background: "var(--bg-tertiary)", border: "1px solid var(--border)",
+              borderRadius: "var(--radius-md)", padding: "10px 14px", color: "var(--text-primary)",
+              fontSize: 14, outline: "none"
+            }}
+            placeholder="Search memory..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+          />
+          <button className="btn btn-primary" onClick={handleSearch}>Search</button>
+          {searchResults && (
+            <button className="btn" style={{ background: "var(--bg-tertiary)" }} onClick={() => setSearchResults(null)}>Clear</button>
+          )}
+        </div>
+      </div>
+
+      {/* Entries */}
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <div className="card-title">🧬 Memory Entries</div>
+            <div className="card-subtitle">{searchResults ? `${searchResults.length} search results` : `${entries.length} stored memories`}</div>
+          </div>
+        </div>
+        {displayEntries.length > 0 ? (
+          <div style={{ maxHeight: "calc(100vh - 400px)", overflowY: "auto" }}>
+            {displayEntries.map((entry: any) => (
+              <div key={entry.id} style={{
+                padding: "12px 16px", borderBottom: "1px solid var(--border)",
+                fontSize: 13
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span className={`badge ${entry.type === 'conversation' ? 'badge-info' : entry.type === 'task' ? 'badge-warning' : 'badge-purple'}`}>
+                    {entry.type}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    {new Date(entry.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                <div style={{ color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  {entry.content.substring(0, 300)}{entry.content.length > 300 ? "..." : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-state-icon">🧬</div>
+            <p className="empty-state-text">No memories stored yet</p>
+            <p className="empty-state-subtext">Memories are created when agents process tasks and conversations</p>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 

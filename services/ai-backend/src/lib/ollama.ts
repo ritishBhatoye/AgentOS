@@ -38,8 +38,25 @@ export async function chat(options: ChatOptions): Promise<ChatResult> {
       messageCount: options.messages.length,
     });
 
+    // Check if model exists, if not fallback to first available
+    const availableModels = await listModels();
+    let modelToUse = options.model;
+    
+    if (!availableModels.includes(options.model)) {
+      const baseModel = options.model.split(':')[0];
+      const similar = availableModels.find(m => m.startsWith(baseModel));
+      if (similar) {
+        modelToUse = similar;
+      } else if (availableModels.length > 0) {
+        modelToUse = availableModels[0];
+      } else {
+        throw new Error(`No models found in Ollama. Please run 'ollama pull ${options.model}'`);
+      }
+      logger.warn(`Model ${options.model} not found, falling back to ${modelToUse}`);
+    }
+
     const response = await ollamaClient.chat({
-      model: options.model,
+      model: modelToUse,
       messages: options.messages,
       stream: false,
     });
@@ -73,8 +90,25 @@ export async function* chatStream(options: ChatOptions): AsyncGenerator<string> 
   try {
     logger.info(`Stream chat request to ${options.model}`);
 
+    // Check if model exists, if not fallback to first available
+    const availableModels = await listModels();
+    let modelToUse = options.model;
+    
+    if (!availableModels.includes(options.model)) {
+      const baseModel = options.model.split(':')[0];
+      const similar = availableModels.find(m => m.startsWith(baseModel));
+      if (similar) {
+        modelToUse = similar;
+      } else if (availableModels.length > 0) {
+        modelToUse = availableModels[0];
+      } else {
+        throw new Error(`No models found in Ollama. Please run 'ollama pull ${options.model}'`);
+      }
+      logger.warn(`Model ${options.model} not found in stream, falling back to ${modelToUse}`);
+    }
+
     const stream = await ollamaClient.chat({
-      model: options.model,
+      model: modelToUse,
       messages: options.messages,
       stream: true,
     });

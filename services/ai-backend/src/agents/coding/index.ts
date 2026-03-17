@@ -1,67 +1,73 @@
 // ============================================================
-// AgentOS — Coding Agent
-// Handles code generation, review, and debugging tasks
+// AgentOS — Coding Agent (v2 — with Tool Calling)
+// Code generation, review, debugging with tool access
 // ============================================================
 
 import { BaseAgent, AgentInfo, AgentExecutionContext, AgentExecutionOutput } from '../baseAgent.js';
-import { chat } from '../../lib/ollama.js';
-import { selectModel } from '../../router/selectModel.js';
+import { runReasoningLoop } from '../reasoningEngine.js';
+import { eventBus } from '../../events/eventBus.js';
 import { SystemLogger } from '../../utils/logger.js';
 
 const logger = new SystemLogger('CodingAgent');
 
-const CODING_SYSTEM_PROMPT = `You are an expert coding AI agent. Your job is to write clean, production-ready code.
+const SYSTEM_PROMPT = `You are the Coding Agent for AgentOS. You are an expert software engineer.
+
+Your capabilities:
+- Generate clean, production-ready TypeScript/JavaScript code
+- Debug and fix code issues
+- Write unit tests
+- Create API endpoints
+- Review code quality
 
 Guidelines:
 - Write TypeScript by default unless specified otherwise
 - Include proper types and interfaces
-- Add meaningful comments for complex logic
-- Follow best practices and design patterns
+- Add meaningful comments
 - Handle errors properly
-- Keep code modular and testable
+- If you need to verify code works, use the code_executor tool
+- If you need to save code, use the file_system tool with action "write"
 
-Always provide complete, runnable code snippets. If you're modifying existing code, clearly indicate what changed.`;
+Always provide complete, runnable code.`;
 
 export class CodingAgent implements BaseAgent {
   info: AgentInfo = {
     id: 'coding',
     name: 'Coding Agent',
-    description: 'Generates, reviews, and debugs code with production-quality standards',
+    description: 'Generates, reviews, and debugs code with production-quality standards. Can execute and save code.',
     status: 'idle',
-    capabilities: ['code_generation', 'code_review', 'debugging', 'refactoring', 'testing'],
+    capabilities: ['code_generation', 'code_review', 'debugging', 'refactoring', 'testing', 'code_executor', 'file_system'],
   };
 
   async execute(context: AgentExecutionContext): Promise<AgentExecutionOutput> {
     const startTime = Date.now();
     this.info.status = 'busy';
     this.info.currentTaskId = context.taskId;
+    eventBus.emit('agent:status', { agentId: 'coding', status: 'busy', taskId: context.taskId });
 
     try {
-      // Force deepseek-coder for coding tasks
       const model = context.model || 'deepseek-coder';
 
-      logger.info('Coding task started', { taskId: context.taskId });
-
-      const result = await chat({
+      const result = await runReasoningLoop({
+        taskId: context.taskId,
+        agentId: 'coding',
         model,
-        messages: [
-          { role: 'system', content: CODING_SYSTEM_PROMPT },
-          { role: 'user', content: context.prompt },
-        ],
+        systemPrompt: SYSTEM_PROMPT,
+        userPrompt: context.prompt,
       });
 
       this.info.status = 'idle';
       this.info.currentTaskId = undefined;
+      eventBus.emit('agent:status', { agentId: 'coding', status: 'idle' });
 
       return {
-        success: true,
-        output: result.content,
-        modelUsed: model,
+        success: result.success,
+        output: result.finalAnswer,
+        modelUsed: result.modelUsed,
         duration: Date.now() - startTime,
       };
     } catch (error) {
       this.info.status = 'error';
-      logger.error('Coding execution failed', { error: String(error) });
+      eventBus.emit('agent:status', { agentId: 'coding', status: 'error' });
       return {
         success: false,
         output: `Coding task failed: ${String(error)}`,
